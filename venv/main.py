@@ -62,39 +62,34 @@ def main():
         rect = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         dilation = cv2.dilate(thresh, rect, iterations=5)
         erosion = cv2.erode(dilation, rect, iterations=1)
-        #cv2.imshow("debug blur", blurred)
-        #cv2.imshow("debug edges", edges)
+        cv2.imshow("debug blur", blurred)
+        cv2.imshow("debug edges", edges)
         cv2.imshow("debug fill", erosion)
         '''Color Detection for bounds Setup'''
+
         #Height Setup
         boundaryHeight = aspectMultiplier * 6
-        middlePad = aspectMultiplier * 7
-        upDownPad = aspectMultiplier * 4
-
+        upDownPad = aspectMultiplier * 1
+        middlePad = imgHeight - 2*(boundaryHeight+upDownPad)
         #Width Setup
-        initialBoundaryStartingPad = aspectMultiplier * 36
-        secondaryBoundaryWidth = aspectMultiplier * 8
+        initialBoundaryStartingPad = aspectMultiplier * 30
+        secondaryBoundaryWidth = aspectMultiplier * 12
         tubePad = aspectMultiplier * 5
-
-        initialBoundaryWidth = (aspectWidth - (initialBoundaryStartingPad / aspectMultiplier) - (
-                (tubePad / aspectMultiplier) + (secondaryBoundaryWidth / aspectMultiplier))) * aspectMultiplier
-
+        initialBoundaryWidth = (aspectWidth - (initialBoundaryStartingPad / aspectMultiplier) - ((tubePad / aspectMultiplier) + (secondaryBoundaryWidth / aspectMultiplier))) * aspectMultiplier
         heightCheck = (2 * (boundaryHeight / aspectMultiplier) + 2 * (upDownPad / aspectMultiplier) + middlePad / aspectMultiplier)
-        if heightCheck != aspectHeight:
+        if middlePad<0:
             exit("Err: STP001 - refer to the manual for troubleshooting")
         if initialBoundaryWidth < secondaryBoundaryWidth:
             exit("Err: STP002 - refer to the manual for troubleshooting")
-
         r2dx1, r2dy1 = (initialBoundaryStartingPad + initialBoundaryWidth), imgHeight - (upDownPad + boundaryHeight)
         r2dx2, r2dy2 = (r2dx1 + secondaryBoundaryWidth), (imgHeight - upDownPad)
-
         r2ux1, r2ux2 = r2dx1, r2dx2
+        r2uy1, r2uy2 = (r2dy1-(boundaryHeight+middlePad)),(r2dy2-(boundaryHeight+middlePad))
 
-        r2uy1, r2uy2 = (r2dy1-116),(r2dy2-116)
 
-        #lowerSecondaryRegion = lowerSecondaryRegion[r2y1:r2y2, r2x1:r2x2]
+        lowerSecondaryRegion = erosion[int(r2dy1):int(r2dy2), int(r2dx1):int(r2dx2)]
 
-        debugBox = cv2.rectangle(erosion, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2)
+        debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2)
         cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),2)
         cv2.imshow("debug boundbox", debugBox)
 
