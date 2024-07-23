@@ -27,6 +27,7 @@ def list_ports():
     return available_ports, working_ports, non_working_ports
 
 
+
 def cEd(frame):
     '''Uses Canny Edge Detection, from a blurred input to detect the outline of the cells.'''
     blurred = cv2.GaussianBlur(src=frame, ksize=(3, 5), sigmaX=0.8)
