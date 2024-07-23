@@ -36,6 +36,7 @@ def cEd(frame):
 #OBS: 2920 1080
 def main():
     '''main code '''
+    oneCellPixelCount = 120
     aspectWidth= 73
     aspectHeight = 27
     aspectMultiplier = 2320/73
@@ -119,7 +120,7 @@ def main():
         #beginningBox Coordinates
         bx1, by1 = 0, r1uy2
         bx2, by2 = beginningBoxWidth, r1dy1
-        beginningBox = erosion[int(by1):int(by2), int(bx1):int(bx2)]
+        beginningBoxRegion = erosion[int(by1):int(by2), int(bx1):int(bx2)]
 
         '''#topBottomFullBoundary Up Coordinates
         tbux1, tbuy1 = 0, upDownPadTopBottomFullBoundary
@@ -130,12 +131,18 @@ def main():
         tbdx1, tbdy1 = tbux1, imgHeight - upDownPadTopBottomFullBoundary
         tbdx2, tbdy2 = tbux2, imgHeight - upDownPadTopBottomFullBoundary - topBottomFullBoundaryHeight'''
 
+        debugBoxThickness = 2
 
-        debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2) #secondary region down
-        cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),2) #secondary region top
-        cv2.rectangle(debugBox, (int(r1dx1), int(r1dy1)), (int(r1dx2), int(r1dy2),), (0, 255, 0), 2)
-        cv2.rectangle(debugBox, (int(r1ux1), int(r1uy1)), (int(r1ux2), int(r1uy2),), (0, 255, 0), 2)
-        cv2.rectangle(debugBox, (int(bx1), int(by1)), (int(bx2), int(by2),), (0, 0, 255), 2)
+        debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), int(debugBoxThickness)) #secondary region down
+        cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),int(debugBoxThickness)) #secondary region top
+        cv2.rectangle(debugBox, (int(r1dx1), int(r1dy1)), (int(r1dx2), int(r1dy2),), (255, 255, 0), int(debugBoxThickness))
+        cv2.rectangle(debugBox, (int(r1ux1), int(r1uy1)), (int(r1ux2), int(r1uy2),), (255, 255, 0), int(debugBoxThickness))
+        cv2.rectangle(debugBox, (int(bx1), int(by1)), (int(bx2), int(by2),), (255, 0, 255), int(debugBoxThickness))
+
+        #calculate the number of debugBox pixels in each box set (secondary, initial and beginning) using the coordinates and the debugBox thickness
+        secondaryBoxPixelCount = ((r2dx2 - r2dx1) * debugBoxThickness + (r2dy2 - r2dy1) * debugBoxThickness) * 1.4
+        initialBoxPixelCount = ((r1dx2 - r1dx1) * debugBoxThickness + (r1dy2 - r1dy1) * debugBoxThickness) *1.4
+        beginningBoxPixelCount = ((bx2 - bx1) * debugBoxThickness + (by2 - by1) * debugBoxThickness) *1.4
 
         '''cv2.rectangle(debugBox, (int(tbux1), int(tbuy1)), (int(tbux2), int(tbuy2),), (0, 0, 255), 2)
         cv2.rectangle(debugBox, (int(tbdx1), int(tbdy1)), (int(tbdx2), int(tbdy2),), (0, 0, 255), 2)'''
@@ -144,6 +151,65 @@ def main():
 
 
         cv2.imshow("debug boundbox", debugBox)
+
+        whiteThresh, whiteMaxVal = 254, 255
+
+        _, thresh = cv2.threshold(beginningBoxRegion, 254, 255, cv2.THRESH_BINARY)
+        nw_beginningBox = np.sum(thresh == 255)
+        _, thresh = cv2.threshold(lowerInitialRegion, 254, 255, cv2.THRESH_BINARY)
+        nw_lowerInitialRegion = np.sum(thresh == 255)
+        _, thresh = cv2.threshold(upperInitialRegion, 254, 255, cv2.THRESH_BINARY)
+        nw_upperInitialRegion = np.sum(thresh == 255)
+        _, thresh = cv2.threshold(lowerSecondaryRegion, 254, 255, cv2.THRESH_BINARY)
+        nw_lowerSecondaryRegion = np.sum(thresh == 255)
+        _, thresh = cv2.threshold(upperSecondaryRegion, 254, 255, cv2.THRESH_BINARY)
+        nw_upperSecondaryRegion = np.sum(thresh == 255)
+
+        '''
+        nw_beginningBox -= beginningBoxPixelCount
+        nw_lowerInitialRegion -= initialBoxPixelCount
+        nw_upperInitialRegion -= initialBoxPixelCount
+        nw_lowerSecondaryRegion -= secondaryBoxPixelCount
+        nw_upperSecondaryRegion -= secondaryBoxPixelCount
+        '''
+
+
+        #display nw in the image
+        cv2.putText(blurred, f"nw_beginningBox: {nw_beginningBox}", (int(bx1), int(by1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nw_lowerInitialRegion: {nw_lowerInitialRegion}", (int(r1dx1), int(r1dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nw_upperInitialRegion: {nw_upperInitialRegion}", (int(r1ux1), int(r1uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nw_lowerSecondaryRegion: {nw_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nw_upperSecondaryRegion: {nw_upperSecondaryRegion}", (int(r2ux1), int(r2uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.imshow("debug boundbox", debugBox)
+
+        #add cellcount on all boxes by taking the number of pixels and dividing it to the oneCellPixelCount
+        cc_beginningBox = (nw_beginningBox / oneCellPixelCount)
+        cc_lowerInitialRegion = (nw_lowerInitialRegion / oneCellPixelCount)
+        cc_upperInitialRegion = (nw_upperInitialRegion / oneCellPixelCount)
+        cc_lowerSecondaryRegion = (nw_lowerSecondaryRegion / oneCellPixelCount)
+        cc_upperSecondaryRegion = (nw_upperSecondaryRegion / oneCellPixelCount)
+
+        #round the cellcount to the nearest whole number
+        cc_beginningBox = round(cc_beginningBox)
+        cc_lowerInitialRegion = round(cc_lowerInitialRegion)
+        cc_upperInitialRegion = round(cc_upperInitialRegion)
+        cc_lowerSecondaryRegion = round(cc_lowerSecondaryRegion)
+        cc_upperSecondaryRegion = round(cc_upperSecondaryRegion)
+
+
+        #display cc in the image
+        cv2.putText(blurred, f"cc_beginningBox: {cc_beginningBox}", (int(bx1), int(by1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"cc_lowerInitialRegion: {cc_lowerInitialRegion}", (int(r1dx1), int(r1dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"cc_upperInitialRegion: {cc_upperInitialRegion}", (int(r1ux1), int(r1uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"cc_lowerSecondaryRegion: {cc_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"cc_upperSecondaryRegion: {cc_upperSecondaryRegion}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.imshow("debug boundbox", debugBox)
+
+
+
+
+
+
 
 
 
