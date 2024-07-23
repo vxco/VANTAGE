@@ -1,4 +1,8 @@
 # ACSS User Manual
+This is the user manual for the Automated Cell Sorting System (ACSS) software. This software is designed to automate the process of sorting cells in the maglev capiley system. The software uses an edge detection algorithm to identify the cells and a machine learning system to sort the cells by adjusting the flowrate and magnet power.
+
+[]:
+---
 # Table of Contents
 1. [Outline](#outline)
 2. [Setup](#setup)

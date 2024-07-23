@@ -33,20 +33,20 @@ def cEd(frame):
     edges = cv2.Canny(image=blurred, threshold1=100, threshold2=200)
     return blurred, edges
 
-
+#OBS: 2920 1080
 def main():
-    aspectWidth = 73
+    '''main code '''
+    aspectWidth= 73
     aspectHeight = 27
-    aspectMultiplier = 16
-    if aspectMultiplier % 2 == 1:
-        print(
-            f"Aspect multiplier was {aspectMultiplier}, should be an even number. Reverting to {aspectMultiplier - 1} ")
+    aspectMultiplier = 2320/73
+    if aspectMultiplier % 2 != 0:
+        print(f"Aspect multiplier was {aspectMultiplier}, should be an even number. Reverting to {aspectMultiplier - 1} ")
         aspectMultiplier -= 1
 
     imgWidth = aspectWidth * aspectMultiplier
     imgHeight = aspectHeight * aspectMultiplier
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture("test001CROP.mp4")
     cap.set(3, imgWidth)
     cap.set(4, imgHeight)
     #capturing the image, setting to a 73:27 Aspect ratio, (as the image input suggests by the capillery size)
@@ -67,40 +67,78 @@ def main():
         cv2.imshow("debug fill", erosion)
         '''Color Detection for bounds Setup'''
 
-        #Height Setup
-        boundaryHeight = aspectMultiplier * 6
+        #Height Setup ---------------------
+        initialBoundaryHeight = aspectMultiplier * 6
+        secondaryBoundaryHeight = aspectMultiplier * 7
+        topBottomFullBoundaryHeight = initialBoundaryHeight
+
+
         upDownPadSecondary = aspectMultiplier * 3
-        upDownPadInitial = upDownPadSecondary
-        middlePadSecondary = imgHeight - 2*(boundaryHeight+upDownPadSecondary)
+        upDownPadInitial = upDownPadSecondary  + (aspectMultiplier * 1)
+        upDownPadTopBottomFullBoundary = (aspectMultiplier * 1)
 
-        middlePadInitial = imgHeight - 2*(boundaryHeight+upDownPadSecondary)
+        middlePadSecondary = imgHeight - 2*(secondaryBoundaryHeight+upDownPadSecondary)
+        middlePadInitial = imgHeight - 2*(initialBoundaryHeight+upDownPadInitial)
 
-        #Width Setup
+
+
+
+        #Width Setup ---------------------
         initialBoundaryStartingPad = aspectMultiplier * 30
+
         secondaryBoundaryWidth = aspectMultiplier * 12
+        beginningBoxWidth = initialBoundaryStartingPad + (aspectMultiplier * 1.5)
+
         tubePad = aspectMultiplier * 5
         initialBoundaryWidth = (aspectWidth - (initialBoundaryStartingPad / aspectMultiplier) - ((tubePad / aspectMultiplier) + (secondaryBoundaryWidth / aspectMultiplier))) * aspectMultiplier
-        heightCheck = (2 * (boundaryHeight / aspectMultiplier) + 2 * (upDownPadSecondary / aspectMultiplier) + middlePadSecondary / aspectMultiplier)
+        heightCheck = (2 * (secondaryBoundaryHeight / aspectMultiplier) + 2 * (upDownPadSecondary / aspectMultiplier) + middlePadSecondary / aspectMultiplier)
         if middlePadSecondary<0:
             exit("Err: STP001 - refer to the manual for troubleshooting")
         if initialBoundaryWidth < secondaryBoundaryWidth:
             exit("Err: STP002 - refer to the manual for troubleshooting")
 
         #Secondary Region Down Coordinates
-        r2dx1, r2dy1 = (initialBoundaryStartingPad + initialBoundaryWidth), imgHeight - (upDownPadSecondary + boundaryHeight)
+        r2dx1, r2dy1 = (initialBoundaryStartingPad + initialBoundaryWidth), imgHeight - (upDownPadSecondary + secondaryBoundaryHeight)
         r2dx2, r2dy2 = (r2dx1 + secondaryBoundaryWidth), (imgHeight - upDownPadSecondary)
         #Secondary Region Up Coordinates
         r2ux1, r2ux2 = r2dx1, r2dx2
-        r2uy1, r2uy2 = (r2dy1-(boundaryHeight+middlePadSecondary)),(r2dy2-(boundaryHeight+middlePadSecondary))
+        r2uy1, r2uy2 = (r2dy1-(secondaryBoundaryHeight+middlePadSecondary)),(r2dy2-(secondaryBoundaryHeight+middlePadSecondary))
         lowerSecondaryRegion = erosion[int(r2dy1):int(r2dy2), int(r2dx1):int(r2dx2)]
         upperSecondaryRegion = erosion[int(r2uy1):int(r2uy2), int(r2ux1):int(r2ux2)]
 
+        #Initial Region Down Coordinates
+        r1dx1, r1dy1 = initialBoundaryStartingPad, imgHeight - (upDownPadInitial + initialBoundaryHeight)
+        r1dx2, r1dy2 = r1dx1 + initialBoundaryWidth, imgHeight - upDownPadInitial
+        #Initial Region Up Coordinates
+        r1ux1, r1ux2 = r1dx1, r1dx2
+        r1uy1, r1uy2 = r1dy1-(initialBoundaryHeight+middlePadInitial), r1dy2-(initialBoundaryHeight+middlePadInitial)
 
+        lowerInitialRegion = erosion[int(r1dy1):int(r1dy2), int(r1dx1):int(r1dx2)]
+        upperInitialRegion = erosion[int(r1uy1):int(r1uy2), int(r1ux1):int(r1ux2)]
+
+        #beginningBox Coordinates
+        bx1, by1 = 0, r1uy2
+        bx2, by2 = beginningBoxWidth, r1dy1
+        beginningBox = erosion[int(by1):int(by2), int(bx1):int(bx2)]
+
+        '''#topBottomFullBoundary Up Coordinates
+        tbux1, tbuy1 = 0, upDownPadTopBottomFullBoundary
+        tbux2, tbuy2 = imgWidth, upDownPadTopBottomFullBoundary + topBottomFullBoundaryHeight
+        topBottomFullBoundaryUp = erosion[int(tbuy1):int(tbuy2), int(tbux1):int(tbux2)]
+
+        #topBottomFullBoundary Down Coordinates (same as up, but inverted to the bottom)
+        tbdx1, tbdy1 = tbux1, imgHeight - upDownPadTopBottomFullBoundary
+        tbdx2, tbdy2 = tbux2, imgHeight - upDownPadTopBottomFullBoundary - topBottomFullBoundaryHeight'''
 
 
         debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2) #secondary region down
         cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),2) #secondary region top
+        cv2.rectangle(debugBox, (int(r1dx1), int(r1dy1)), (int(r1dx2), int(r1dy2),), (0, 255, 0), 2)
+        cv2.rectangle(debugBox, (int(r1ux1), int(r1uy1)), (int(r1ux2), int(r1uy2),), (0, 255, 0), 2)
+        cv2.rectangle(debugBox, (int(bx1), int(by1)), (int(bx2), int(by2),), (0, 0, 255), 2)
 
+        '''cv2.rectangle(debugBox, (int(tbux1), int(tbuy1)), (int(tbux2), int(tbuy2),), (0, 0, 255), 2)
+        cv2.rectangle(debugBox, (int(tbdx1), int(tbdy1)), (int(tbdx2), int(tbdy2),), (0, 0, 255), 2)'''
 
 
 
