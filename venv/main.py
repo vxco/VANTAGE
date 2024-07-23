@@ -69,29 +69,46 @@ def main():
 
         #Height Setup
         boundaryHeight = aspectMultiplier * 6
-        upDownPad = aspectMultiplier * 1
-        middlePad = imgHeight - 2*(boundaryHeight+upDownPad)
+        upDownPadSecondary = aspectMultiplier * 3
+        upDownPadInitial = upDownPadSecondary
+        middlePadSecondary = imgHeight - 2*(boundaryHeight+upDownPadSecondary)
+
+        middlePadInitial = imgHeight - 2*(boundaryHeight+upDownPadSecondary)
+
         #Width Setup
         initialBoundaryStartingPad = aspectMultiplier * 30
         secondaryBoundaryWidth = aspectMultiplier * 12
         tubePad = aspectMultiplier * 5
         initialBoundaryWidth = (aspectWidth - (initialBoundaryStartingPad / aspectMultiplier) - ((tubePad / aspectMultiplier) + (secondaryBoundaryWidth / aspectMultiplier))) * aspectMultiplier
-        heightCheck = (2 * (boundaryHeight / aspectMultiplier) + 2 * (upDownPad / aspectMultiplier) + middlePad / aspectMultiplier)
-        if middlePad<0:
+        heightCheck = (2 * (boundaryHeight / aspectMultiplier) + 2 * (upDownPadSecondary / aspectMultiplier) + middlePadSecondary / aspectMultiplier)
+        if middlePadSecondary<0:
             exit("Err: STP001 - refer to the manual for troubleshooting")
         if initialBoundaryWidth < secondaryBoundaryWidth:
             exit("Err: STP002 - refer to the manual for troubleshooting")
-        r2dx1, r2dy1 = (initialBoundaryStartingPad + initialBoundaryWidth), imgHeight - (upDownPad + boundaryHeight)
-        r2dx2, r2dy2 = (r2dx1 + secondaryBoundaryWidth), (imgHeight - upDownPad)
+
+        #Secondary Region Down Coordinates
+        r2dx1, r2dy1 = (initialBoundaryStartingPad + initialBoundaryWidth), imgHeight - (upDownPadSecondary + boundaryHeight)
+        r2dx2, r2dy2 = (r2dx1 + secondaryBoundaryWidth), (imgHeight - upDownPadSecondary)
+        #Secondary Region Up Coordinates
         r2ux1, r2ux2 = r2dx1, r2dx2
-        r2uy1, r2uy2 = (r2dy1-(boundaryHeight+middlePad)),(r2dy2-(boundaryHeight+middlePad))
-
-
+        r2uy1, r2uy2 = (r2dy1-(boundaryHeight+middlePadSecondary)),(r2dy2-(boundaryHeight+middlePadSecondary))
         lowerSecondaryRegion = erosion[int(r2dy1):int(r2dy2), int(r2dx1):int(r2dx2)]
+        upperSecondaryRegion = erosion[int(r2uy1):int(r2uy2), int(r2ux1):int(r2ux2)]
 
-        debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2)
-        cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),2)
+
+
+
+        debugBox = cv2.rectangle(blurred, (int(r2dx1), int(r2dy1)), (int(r2dx2), int(r2dy2)), (255, 0, 0), 2) #secondary region down
+        cv2.rectangle(debugBox, (int(r2ux1) , int(r2uy1)) , (int(r2ux2), int(r2uy2)), (255,0,0),2) #secondary region top
+
+
+
+
+
         cv2.imshow("debug boundbox", debugBox)
+
+
+
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
