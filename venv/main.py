@@ -41,7 +41,7 @@ def main():
     oneCellPixelCount = 120
     aspectWidth= 73
     aspectHeight = 27
-    aspectMultiplier = 2320/73
+    aspectMultiplier = 14 #use 2320/73 for mac, 14 for best results
     if aspectMultiplier % 2 != 0:
         print(f"Aspect multiplier was {aspectMultiplier}, should be an even number. Reverting to {aspectMultiplier - 1} ")
         aspectMultiplier -= 1
@@ -49,7 +49,7 @@ def main():
     imgWidth = aspectWidth * aspectMultiplier
     imgHeight = aspectHeight * aspectMultiplier
 
-    cap = cv2.VideoCapture("test001CROP.mp4")
+    cap = cv2.VideoCapture(0)
     cap.set(3, imgWidth)
     cap.set(4, imgHeight)
     #capturing the image, setting to a 73:27 Aspect ratio, (as the image input suggests by the capillery size)
