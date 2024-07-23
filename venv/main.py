@@ -34,6 +34,7 @@ def cEd(frame):
     edges = cv2.Canny(image=blurred, threshold1=100, threshold2=200)
     return blurred, edges
 
+
 #OBS: 2920 1080
 def main():
     '''main code '''
