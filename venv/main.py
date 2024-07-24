@@ -196,7 +196,7 @@ def main():
         cc_upperInitialRegion = round(cc_upperInitialRegion)
         cc_lowerSecondaryRegion = round(cc_lowerSecondaryRegion)
         cc_upperSecondaryRegion = round(cc_upperSecondaryRegion)
-
+#AHSKLDJHALDKJAHSDLIUHP IUDY=)'(YD=)('Y =)D(YH IOJDHIL JSBD=H)( Y=)IOUHGNS=(M)YD HOBI KASUINDY(OAIU GSDOI ASY(DJ)P(
 
         #display cc in the image
         if cc_beginningBox < 0 or cc_lowerInitialRegion < 0 or cc_upperInitialRegion < 0 or cc_lowerSecondaryRegion < 0 or cc_upperSecondaryRegion < 0:
