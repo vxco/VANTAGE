@@ -182,7 +182,6 @@ def main():
         cv2.putText(blurred, f"nw_upperInitialRegion: {nw_upperInitialRegion}", (int(r1ux1), int(r1uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"nw_lowerSecondaryRegion: {nw_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"nw_upperSecondaryRegion: {nw_upperSecondaryRegion}", (int(r2ux1), int(r2uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.imshow("debug boundbox", debugBox)
 
         #add cellcount on all boxes by taking the number of pixels and dividing it to the oneCellPixelCount
         cc_beginningBox = (nw_beginningBox / oneCellPixelCount)
@@ -200,12 +199,17 @@ def main():
 
 
         #display cc in the image
+        if cc_beginningBox < 0 or cc_lowerInitialRegion < 0 or cc_upperInitialRegion < 0 or cc_lowerSecondaryRegion < 0 or cc_upperSecondaryRegion < 0:
+            exit("Err: LVC001 - refer to the manual for troubleshooting")
         cv2.putText(blurred, f"cc_beginningBox: {cc_beginningBox}", (int(bx1), int(by1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_lowerInitialRegion: {cc_lowerInitialRegion}", (int(r1dx1), int(r1dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_upperInitialRegion: {cc_upperInitialRegion}", (int(r1ux1), int(r1uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_lowerSecondaryRegion: {cc_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_upperSecondaryRegion: {cc_upperSecondaryRegion}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cv2.putText(blurred, f"FPS: {fps}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.imshow("debug boundbox", debugBox)
+
 
 
 
