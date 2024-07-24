@@ -59,6 +59,8 @@ def main():
         if not ret:
             exit("Err: CPT001 - refer to the manual for troubleshooting")
 
+        fps = cap.get(cv2.CAP_PROP_FPS)
+
         '''Uses Dilation and Erosion algorithms to fill the detected cell edges, for better location detection of cells.'''
         blurred, edges = cEd(frame)
         _, thresh = cv2.threshold(edges, 100, 255, cv2.THRESH_BINARY)
@@ -206,7 +208,7 @@ def main():
         cv2.putText(blurred, f"cc_upperInitialRegion: {cc_upperInitialRegion}", (int(r1ux1), int(r1uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_lowerSecondaryRegion: {cc_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_upperSecondaryRegion: {cc_upperSecondaryRegion}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        fps = cap.get(cv2.CAP_PROP_FPS)
+
         cv2.putText(blurred, f"FPS: {fps}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.imshow("debug boundbox", debugBox)
 
