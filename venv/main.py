@@ -72,16 +72,22 @@ def main():
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         '''Uses Dilation and Erosion algorithms to fill the detected cell edges, for better location detection of cells.'''
-        thresh = cv2.threshold(edges, 128, 255, cv2.THRESH_BINARY)[1]
+        blurred, edges = cEd(frame)
 
+
+
+        thresh = cv2.threshold(edges, 250, 255, cv2.THRESH_BINARY)[1]
         # get the (largest) contour
         contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours[0] if len(contours) == 2 else contours[1]
         big_contour = max(contours, key=cv2.contourArea)
 
         # draw white filled contour on black background
-        result = np.zeros_like(img)
-        cv2.drawContours(result, [big_contour], 0, (255, 255, 255), cv2.FILLED)
+        erosion = np.zeros_like(edges)
+        cv2.drawContours(erosion, [big_contour], 0, (255, 255, 255), cv2.FILLED)
+
+        cv2.imshow("erosion", erosion)
+        cv2.imshow("edges", edges)
 
         #Height Setup ---------------------
         initialBoundaryHeight = aspectMultiplier * 6
