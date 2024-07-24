@@ -42,7 +42,8 @@ def main():
     oneCellPixelCount = 125
     aspectWidth= 73
     aspectHeight = 27
-    aspectMultiplier = 12 #use 2320/73 for mac, 14 for best results
+    aspectMultiplier = 14 #use 2320/73 for mac, 14 for best results
+
     if aspectMultiplier % 2 != 0:
         print(f"Aspect multiplier was {aspectMultiplier}, should be an even number. Reverting to {aspectMultiplier - 1} ")
         aspectMultiplier -= 1
@@ -202,7 +203,6 @@ def main():
         cc_upperInitialRegion = round(cc_upperInitialRegion)
         cc_lowerSecondaryRegion = round(cc_lowerSecondaryRegion)
         cc_upperSecondaryRegion = round(cc_upperSecondaryRegion)
-#AHSKLDJHALDKJAHSDLIUHP IUDY=)'(YD=)('Y =)D(YH IOJDHIL JSBD=H)( Y=)IOUHGNS=(M)YD HOBI KASUINDY(OAIU GSDOI ASY(DJ)P(
 
         #display cc in the image
         if cc_beginningBox < 0 or cc_lowerInitialRegion < 0 or cc_upperInitialRegion < 0 or cc_lowerSecondaryRegion < 0 or cc_upperSecondaryRegion < 0:
