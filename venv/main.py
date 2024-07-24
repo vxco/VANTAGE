@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 
 
 def list_ports():
@@ -53,11 +54,18 @@ def main():
     cap.set(3, imgWidth)
     cap.set(4, imgHeight)
     #capturing the image, setting to a 73:27 Aspect ratio, (as the image input suggests by the capillery size)
+    last_update_time = time.time()
+    update_interval = 1 / 3  # Update three times per second
+    cell_counts = []  # To store frame rates for averaging
 
+    latestAvgCCBeginningBox, latestAvgCCLowerInitialRegion, latestAvgCCUpperInitialRegion, latestAvgCCLowerSecondaryRegion, latestAvgCCUpperSecondaryRegion = 0, 0, 0, 0, 0
     while True:
         ret, frame = cap.read()
         if not ret:
             exit("Err: CPT001 - refer to the manual for troubleshooting")
+
+        current_time = time.time()
+        elapsed_time = current_time - last_update_time
 
         fps = cap.get(cv2.CAP_PROP_FPS)
 
@@ -154,10 +162,6 @@ def main():
 
 
 
-        cv2.imshow("debug boundbox", debugBox)
-
-        whiteThresh, whiteMaxVal = 254, 255
-
         _, thresh = cv2.threshold(beginningBoxRegion, 254, 255, cv2.THRESH_BINARY)
         nw_beginningBox = np.sum(thresh == 255)
         _, thresh = cv2.threshold(lowerInitialRegion, 254, 255, cv2.THRESH_BINARY)
@@ -210,17 +214,32 @@ def main():
         cv2.putText(blurred, f"cc_upperSecondaryRegion: {cc_upperSecondaryRegion}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         cv2.putText(blurred, f"FPS: {fps}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+        cell_count_current = (cc_beginningBox, cc_lowerInitialRegion, cc_upperInitialRegion, cc_lowerSecondaryRegion, cc_upperSecondaryRegion)
+        cell_counts.append(cell_count_current)
+
+        if elapsed_time >= update_interval:
+            averages = np.mean(cell_counts, axis=0)  # Calculate mean across each tuple element
+            # Update the latest averages
+
+            latestAvgCCBeginningBox = averages[0]
+            latestAvgCCLowerInitialRegion = averages[1]
+            latestAvgCCUpperInitialRegion = averages[2]
+            latestAvgCCLowerSecondaryRegion = averages[3]
+            latestAvgCCUpperSecondaryRegion = averages[4]
+
+            # Reset the timer and cell counts list
+            last_update_time = current_time
+            cell_counts = []
+
+        cv2.putText(blurred, f"Average cc_beginningBox: {round(latestAvgCCBeginningBox)}", (int(bx1), int(by1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"Average cc_lowerInitialRegion: {round(latestAvgCCLowerInitialRegion)}", (int(r1dx1), int(r1dy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"Average cc_upperInitialRegion: {round(latestAvgCCUpperInitialRegion)}", (int(r1ux1), int(r1uy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"Average cc_lowerSecondaryRegion: {round(latestAvgCCLowerSecondaryRegion)}", (int(r2dx1), int(r2dy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"Average cc_upperSecondaryRegion: {round(latestAvgCCUpperSecondaryRegion)}", (int(r2ux1), int(r2uy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+
         cv2.imshow("debug boundbox", debugBox)
-
-
-
-
-
-
-
-
-
-
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
