@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import time
-#hello im nil2222
+
 
 
 def list_ports():
@@ -72,15 +72,16 @@ def main():
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         '''Uses Dilation and Erosion algorithms to fill the detected cell edges, for better location detection of cells.'''
-        blurred, edges = cEd(frame)
-        _, thresh = cv2.threshold(edges, 100, 255, cv2.THRESH_BINARY)
-        rect = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        dilation = cv2.dilate(thresh, rect, iterations=5)
-        erosion = cv2.erode(dilation, rect, iterations=1)
-        cv2.imshow("debug blur", blurred)
-        cv2.imshow("debug edges", edges)
-        cv2.imshow("debug fill", erosion)
-        '''Color Detection for bounds Setup'''
+        thresh = cv2.threshold(edges, 128, 255, cv2.THRESH_BINARY)[1]
+
+        # get the (largest) contour
+        contours = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = contours[0] if len(contours) == 2 else contours[1]
+        big_contour = max(contours, key=cv2.contourArea)
+
+        # draw white filled contour on black background
+        result = np.zeros_like(img)
+        cv2.drawContours(result, [big_contour], 0, (255, 255, 255), cv2.FILLED)
 
         #Height Setup ---------------------
         initialBoundaryHeight = aspectMultiplier * 6
