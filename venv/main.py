@@ -39,10 +39,10 @@ def cEd(frame):
 #OBS: 2920 1080
 def main():
     '''main code '''
-    oneCellPixelCount = 120
+    oneCellPixelCount = 125
     aspectWidth= 73
     aspectHeight = 27
-    aspectMultiplier = 14 #use 2320/73 for mac, 14 for best results
+    aspectMultiplier = 12 #use 2320/73 for mac, 14 for best results
     if aspectMultiplier % 2 != 0:
         print(f"Aspect multiplier was {aspectMultiplier}, should be an even number. Reverting to {aspectMultiplier - 1} ")
         aspectMultiplier -= 1
@@ -55,7 +55,7 @@ def main():
     cap.set(4, imgHeight)
     #capturing the image, setting to a 73:27 Aspect ratio, (as the image input suggests by the capillery size)
     last_update_time = time.time()
-    update_interval = 1 / 3  # Update three times per second
+    update_interval = 1 / 6  # Update three times per second
     cell_counts = []  # To store frame rates for averaging
 
     latestAvgCCBeginningBox, latestAvgCCLowerInitialRegion, latestAvgCCUpperInitialRegion, latestAvgCCLowerSecondaryRegion, latestAvgCCUpperSecondaryRegion = 0, 0, 0, 0, 0
@@ -183,11 +183,11 @@ def main():
 
 
         #display nw in the image
-        cv2.putText(blurred, f"nw_beginningBox: {nw_beginningBox}", (int(bx1), int(by1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"nw_lowerInitialRegion: {nw_lowerInitialRegion}", (int(r1dx1), int(r1dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"nw_upperInitialRegion: {nw_upperInitialRegion}", (int(r1ux1), int(r1uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"nw_lowerSecondaryRegion: {nw_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"nw_upperSecondaryRegion: {nw_upperSecondaryRegion}", (int(r2ux1), int(r2uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nwp: {nw_beginningBox}", (int(bx1), int(by1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nwp: {nw_lowerInitialRegion}", (int(r1dx1), int(r1dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nwp: {nw_upperInitialRegion}", (int(r1ux1), int(r1uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nwp: {nw_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"nwp: {nw_upperSecondaryRegion}", (int(r2ux1), int(r2uy1)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         #add cellcount on all boxes by taking the number of pixels and dividing it to the oneCellPixelCount
         cc_beginningBox = (nw_beginningBox / oneCellPixelCount)
@@ -207,12 +207,12 @@ def main():
         #display cc in the image
         if cc_beginningBox < 0 or cc_lowerInitialRegion < 0 or cc_upperInitialRegion < 0 or cc_lowerSecondaryRegion < 0 or cc_upperSecondaryRegion < 0:
             exit("Err: LVC001 - refer to the manual for troubleshooting")
-        cv2.putText(blurred, f"cc_beginningBox: {cc_beginningBox}", (int(bx1), int(by1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        '''cv2.putText(blurred, f"cc_beginningBox: {cc_beginningBox}", (int(bx1), int(by1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_lowerInitialRegion: {cc_lowerInitialRegion}", (int(r1dx1), int(r1dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_upperInitialRegion: {cc_upperInitialRegion}", (int(r1ux1), int(r1uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_lowerSecondaryRegion: {cc_lowerSecondaryRegion}", (int(r2dx1), int(r2dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         cv2.putText(blurred, f"cc_upperSecondaryRegion: {cc_upperSecondaryRegion}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
+        '''
         cv2.putText(blurred, f"FPS: {fps}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         cell_count_current = (cc_beginningBox, cc_lowerInitialRegion, cc_upperInitialRegion, cc_lowerSecondaryRegion, cc_upperSecondaryRegion)
@@ -232,11 +232,11 @@ def main():
             last_update_time = current_time
             cell_counts = []
 
-        cv2.putText(blurred, f"Average cc_beginningBox: {round(latestAvgCCBeginningBox)}", (int(bx1), int(by1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"Average cc_lowerInitialRegion: {round(latestAvgCCLowerInitialRegion)}", (int(r1dx1), int(r1dy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"Average cc_upperInitialRegion: {round(latestAvgCCUpperInitialRegion)}", (int(r1ux1), int(r1uy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"Average cc_lowerSecondaryRegion: {round(latestAvgCCLowerSecondaryRegion)}", (int(r2dx1), int(r2dy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-        cv2.putText(blurred, f"Average cc_upperSecondaryRegion: {round(latestAvgCCUpperSecondaryRegion)}", (int(r2ux1), int(r2uy1) + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"CC: {round(latestAvgCCBeginningBox)}", (int(bx1), int(by1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"CC: {round(latestAvgCCLowerInitialRegion)}", (int(r1dx1), int(r1dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"CC: {round(latestAvgCCUpperInitialRegion)}", (int(r1ux1), int(r1uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"CC: {round(latestAvgCCLowerSecondaryRegion)}", (int(r2dx1), int(r2dy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(blurred, f"CC: {round(latestAvgCCUpperSecondaryRegion)}", (int(r2ux1), int(r2uy1) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
 
         cv2.imshow("debug boundbox", debugBox)
