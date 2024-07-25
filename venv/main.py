@@ -32,12 +32,28 @@ class Region:
             self.cell_count_history = []
             self.last_update_time = current_time
 
-    def calculate_red_green_ratio(self, blurred):
-        region = blurred[self.y1:self.y2, self.x1:self.x2]
-        _, thresh = cv2.threshold(region, 200, 255, cv2.THRESH_BINARY)
-        red_pixels = np.sum(thresh == 255)
-        _, thresh = cv2.threshold(region, 100, 200, cv2.THRESH_BINARY)
-        green_pixels = np.sum(thresh == 255)
+    def calculate_red_green_ratio(self, frame):
+        region = frame[self.y1:self.y2, self.x1:self.x2]
+
+        # Convert to HSV color space
+        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+
+        lower_red1 = np.array([0, 70, 50])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([170, 70, 50])
+        upper_red2 = np.array([180, 255, 255])
+
+        lower_green = np.array([40, 70, 50])
+        upper_green = np.array([80, 255, 255])
+
+        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        mask_red = cv2.bitwise_or(mask_red1, mask_red2)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+        red_pixels = cv2.countNonZero(mask_red)
+        green_pixels = cv2.countNonZero(mask_green)
+
         self.red_green_ratio = red_pixels / green_pixels if green_pixels > 0 else 0
 
     def draw(self, image, color, thickness):
@@ -116,6 +132,7 @@ class CellDetector:
         for region in self.regions:
             region.update_white_pixels(erosion)
             region.calculate_cell_count(self.one_cell_pixel_count)
+            region.calculate_red_green_ratio(frame)  # Pass the original frame
 
         return blurred, edges, erosion
 
