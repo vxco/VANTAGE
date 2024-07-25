@@ -220,9 +220,9 @@ class MainWindow(QMainWindow):
         self.timer.start(30)  # Update every 30 ms
 
     def initUI(self):
-        self.setWindowTitle('Advanced Cell Detector')
-        self.setFixedSize(1200, 800)  # Set fixed size for the main window
-        self.setStyleSheet("background-color: #202020;")
+        self.setWindowTitle('VANTAGE - Vision Assisted Nanoparticle Tracking and Guided Extraction')
+        self.setFixedSize(1200, 800)
+        self.setStyleSheet("background-color: #F89880;")
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
