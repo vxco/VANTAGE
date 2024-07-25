@@ -1,6 +1,37 @@
 import cv2
 import numpy as np
 import time
+import argparse
+import sys
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QPushButton, QLabel, QGroupBox, QGridLayout, QSlider, QComboBox)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap, QFont
+
+
+
+
+def list_ports():
+    is_working = True
+    dev_port = 0
+    working_ports = []
+    available_ports = []
+    while is_working:
+        camera = cv2.VideoCapture(dev_port)
+        if not camera.isOpened():
+            is_working = False
+
+        else:
+            is_reading, img = camera.read()
+            w = camera.get(3)
+            h = camera.get(4)
+            if is_reading:
+                working_ports.append(dev_port)
+            else:
+                available_ports.append(dev_port)
+        dev_port +=1
+    return available_ports,working_ports
+
 
 
 class Region:
@@ -168,36 +199,160 @@ class CellDetector:
     def draw_regions(self, image):
         for region in self.regions:
             region.draw(image, (255, 0, 0), 2)
+            #help
 
     def get_cell_counts(self):
         return [region.cell_count for region in self.regions]
 
 
-def main():
-    detector = CellDetector()
-    cap = cv2.VideoCapture(0)
-    cap.set(3, detector.img_width)
-    cap.set(4, detector.img_height)
+class MainWindow(QMainWindow):
+    def __init__(self, detector):
+        super().__init__()
+        self.detector = detector
+        self.initUI()
 
-    while True:
-        ret, frame = cap.read()
+        self.cap = cv2.VideoCapture(0)
+        self.cap.set(3, detector.img_width)
+        self.cap.set(4, detector.img_height)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(30)  # Update every 30 ms
+
+    def initUI(self):
+        self.setWindowTitle('Advanced Cell Detector')
+        self.setFixedSize(1200, 800)  # Set fixed size for the main window
+        self.setStyleSheet("background-color: #202020;")
+
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        main_layout = QHBoxLayout()
+
+        # Left panel for video feed
+        left_panel = QVBoxLayout()
+        self.image_label = QLabel(self)
+        self.image_label.setFixedSize(800, 600)
+        self.image_label.setStyleSheet("border: 2px solid #3498db;")
+        left_panel.addWidget(self.image_label)
+
+        # Right panel for controls and info
+        right_panel = QVBoxLayout()
+
+        # Debug controls
+        debug_group = QGroupBox("Debug Controls")
+        debug_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        debug_layout = QVBoxLayout()
+        self.debug_button = QPushButton('Toggle Debug Mode')
+        self.debug_button.clicked.connect(self.toggle_debug)
+        self.debug_button.setStyleSheet("background-color: #3498db; color: white;")
+        debug_layout.addWidget(self.debug_button)
+
+        # Add dropdown for selecting debug screen
+        self.debug_screen_selector = QComboBox()
+        self.debug_screen_selector.addItems(["Original", "Edges", "Erosion"])
+        debug_layout.addWidget(self.debug_screen_selector)
+
+        debug_group.setLayout(debug_layout)
+        right_panel.addWidget(debug_group)
+
+        # Cell count display
+        count_group = QGroupBox("Cell Counts")
+        count_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        count_layout = QGridLayout()
+        self.count_labels = []
+        for i, region in enumerate(self.detector.regions):
+            label = QLabel(f"{region.name}: 0")
+            label.setStyleSheet("font-size: 14px;")
+            count_layout.addWidget(label, i // 2, i % 2)
+            self.count_labels.append(label)
+        count_group.setLayout(count_layout)
+        right_panel.addWidget(count_group)
+
+        # Threshold control
+        threshold_group = QGroupBox("Threshold Control")
+        threshold_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        threshold_layout = QVBoxLayout()
+        self.threshold_slider = QSlider(Qt.Horizontal)
+        self.threshold_slider.setRange(0, 255)
+        self.threshold_slider.setValue(100)
+        self.threshold_slider.valueChanged.connect(self.update_threshold)
+        threshold_layout.addWidget(self.threshold_slider)
+        threshold_group.setLayout(threshold_layout)
+        right_panel.addWidget(threshold_group)
+
+        # Quit button
+        self.quit_button = QPushButton('Quit')
+        self.quit_button.clicked.connect(self.close)
+        self.quit_button.setStyleSheet("background-color: #e74c3c; color: white;")
+        right_panel.addWidget(self.quit_button)
+
+        main_layout.addLayout(left_panel, 2)
+        main_layout.addLayout(right_panel, 1)
+        central_widget.setLayout(main_layout)
+
+        self.debug_mode = False
+
+    def update_frame(self):
+        ret, frame = self.cap.read()
         if not ret:
             print("Err: CPT001 - refer to the manual for troubleshooting")
-            break
+            return
 
-        blurred, edges, erosion = detector.process_frame(frame)
-        detector.draw_regions(frame)
+        blurred, edges, erosion = self.detector.process_frame(frame)
 
-        cv2.imshow("debug frame", frame)
-        cv2.imshow("debug edges", edges)
-        cv2.imshow("debug fill", erosion)
+        if self.debug_mode:
+            selected_screen = self.debug_screen_selector.currentText()
+            if selected_screen == "Original":
+                debug_frame = frame
+            elif selected_screen == "Edges":
+                debug_frame = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+            elif selected_screen == "Erosion":
+                debug_frame = cv2.cvtColor(erosion, cv2.COLOR_GRAY2BGR)
+            self.detector.draw_regions(debug_frame)
+            self.display_image(debug_frame)
+        else:
+            self.display_image(frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # Update cell count labels
+        for i, region in enumerate(self.detector.regions):
+            self.count_labels[i].setText(f"{region.name}: {region.cell_count}")
 
-    cap.release()
-    cv2.destroyAllWindows()
+    def display_image(self, img):
+        qformat = QImage.Format_RGB888
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = QImage(img, img.shape[1], img.shape[0], img.strides[0], qformat)
+        pixmap = QPixmap.fromImage(img)
+        self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def toggle_debug(self):
+        self.debug_mode = not self.debug_mode
+        self.debug_button.setText('Disable Debug Mode' if self.debug_mode else 'Enable Debug Mode')
+
+    def update_threshold(self):
+        threshold = self.threshold_slider.value()
+        # self.detector.update_threshold(threshold)  # Implement this method in your CellDetector class
+
+    def closeEvent(self, event):
+        self.cap.release()
+
+
+def main():
+    detector = CellDetector()
+    app = QApplication(sys.argv)
+    main_window = MainWindow(detector)
+    main_window.show()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--list", help="list all the available cameras", action="store_true")
+    args = parser.parse_args()
+
+    if args.list:
+        available_ports, working_ports = list_ports()
+        print("Available ports: ", available_ports)
+        print("Working ports: ", working_ports)
+    else:
+        main()
