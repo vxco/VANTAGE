@@ -15,7 +15,9 @@ class Region:
         self.red_green_ratio = 0
         self.cell_count_history = []
         self.last_update_time = time.time()
-        self.update_interval = 1 / 6
+        self.update_interval = 1 / 3
+        self.red_cells = 0
+        self.green_cells = 0
 
     def update_white_pixels(self, erosion):
         region = erosion[self.y1:self.y2, self.x1:self.x2]
@@ -54,7 +56,15 @@ class Region:
         red_pixels = cv2.countNonZero(mask_red)
         green_pixels = cv2.countNonZero(mask_green)
 
-        self.red_green_ratio = red_pixels / green_pixels if green_pixels > 0 else 0
+        self.red_green_ratio = red_pixels / green_pixels if green_pixels != 0 else red_pixels
+
+    def calculate_red_green_cells(self):
+        if self.red_green_ratio > 0:
+            self.red_cells = round(self.cell_count * (self.red_green_ratio / (1 + self.red_green_ratio)))
+            self.green_cells = self.cell_count - self.red_cells
+        else:
+            self.red_cells = self.cell_count
+            self.green_cells = 0
 
     def draw(self, image, color, thickness):
         cv2.rectangle(image, (self.x1, self.y1), (self.x2, self.y2), color, thickness)
@@ -62,9 +72,10 @@ class Region:
                     2)
         cv2.putText(image, f"CC: {self.cell_count}", (self.x1, self.y1 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (255, 0, 0), 2)
-        cv2.putText(image, f"RGR: {self.red_green_ratio:.2f}", (self.x1, self.y1 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+        cv2.putText(image, f"R: {self.red_cells}", (self.x1, self.y1 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (255, 0, 0), 2)
-
+        cv2.putText(image, f"G: {self.green_cells}", (self.x1 + 50, self.y1 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 0, 0), 2)
 
 class CellDetector:
     def __init__(self, aspect_width=73, aspect_height=27, aspect_multiplier=14):
@@ -132,7 +143,8 @@ class CellDetector:
         for region in self.regions:
             region.update_white_pixels(erosion)
             region.calculate_cell_count(self.one_cell_pixel_count)
-            region.calculate_red_green_ratio(frame)  # Pass the original frame
+            region.calculate_red_green_ratio(frame)
+            region.calculate_red_green_cells()
 
         return blurred, edges, erosion
 
@@ -169,10 +181,9 @@ def main():
             break
 
         blurred, edges, erosion = detector.process_frame(frame)
-        detector.draw_regions(blurred)
+        detector.draw_regions(frame)
 
-
-        cv2.imshow("debug blur", blurred)
+        cv2.imshow("debug frame", frame)
         cv2.imshow("debug edges", edges)
         cv2.imshow("debug fill", erosion)
 
