@@ -12,6 +12,10 @@ class Region:
         self.name = name
         self.cell_count = 0
         self.white_pixels = 0
+        self.red_green_ratio = 0
+        self.cell_count_history = []
+        self.last_update_time = time.time()
+        self.update_interval = 1 / 6
 
     def update_white_pixels(self, erosion):
         region = erosion[self.y1:self.y2, self.x1:self.x2]
@@ -19,13 +23,30 @@ class Region:
         self.white_pixels = np.sum(thresh == 255)
 
     def calculate_cell_count(self, one_cell_pixel_count):
-        self.cell_count = round(self.white_pixels / one_cell_pixel_count)
+        current_cell_count = round(self.white_pixels / one_cell_pixel_count)
+        self.cell_count_history.append(current_cell_count)
+
+        current_time = time.time()
+        if current_time - self.last_update_time >= self.update_interval:
+            self.cell_count = round(np.mean(self.cell_count_history))
+            self.cell_count_history = []
+            self.last_update_time = current_time
+
+    def calculate_red_green_ratio(self, blurred):
+        region = blurred[self.y1:self.y2, self.x1:self.x2]
+        _, thresh = cv2.threshold(region, 200, 255, cv2.THRESH_BINARY)
+        red_pixels = np.sum(thresh == 255)
+        _, thresh = cv2.threshold(region, 100, 200, cv2.THRESH_BINARY)
+        green_pixels = np.sum(thresh == 255)
+        self.red_green_ratio = red_pixels / green_pixels if green_pixels > 0 else 0
 
     def draw(self, image, color, thickness):
         cv2.rectangle(image, (self.x1, self.y1), (self.x2, self.y2), color, thickness)
         cv2.putText(image, f"nwp: {self.white_pixels}", (self.x1, self.y1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),
                     2)
         cv2.putText(image, f"CC: {self.cell_count}", (self.x1, self.y1 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 0, 0), 2)
+        cv2.putText(image, f"RGR: {self.red_green_ratio:.2f}", (self.x1, self.y1 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (255, 0, 0), 2)
 
 
@@ -124,10 +145,6 @@ def main():
     cap.set(3, detector.img_width)
     cap.set(4, detector.img_height)
 
-    last_update_time = time.time()
-    update_interval = 1 / 6
-    cell_counts = []
-
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -137,20 +154,6 @@ def main():
         blurred, edges, erosion = detector.process_frame(frame)
         detector.draw_regions(blurred)
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        cv2.putText(blurred, f"FPS: {fps}", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-        cell_counts.append(detector.get_cell_counts())
-
-        current_time = time.time()
-        elapsed_time = current_time - last_update_time
-
-        if elapsed_time >= update_interval:
-            averages = np.mean(cell_counts, axis=0)
-            for region, avg in zip(detector.regions, averages):
-                region.cell_count = round(avg)
-            last_update_time = current_time
-            cell_counts = []
 
         cv2.imshow("debug blur", blurred)
         cv2.imshow("debug edges", edges)
