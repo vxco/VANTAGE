@@ -57,6 +57,7 @@ class Region:
         green_pixels = cv2.countNonZero(mask_green)
 
         self.red_green_ratio = red_pixels / green_pixels if green_pixels != 0 else red_pixels
+        #TODO: Add a check for red_pixels == 0
 
     def calculate_red_green_cells(self):
         if self.red_green_ratio > 0:
@@ -79,6 +80,7 @@ class Region:
                     (255, 0, 0), 2)
         cv2.putText(image, f"G: {self.green_cells}", (self.x1 + 50, self.y1 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (255, 0, 0), 2)
+
 
 class CellDetector:
     def __init__(self, aspect_width=73, aspect_height=27, aspect_multiplier=14):
@@ -139,6 +141,7 @@ class CellDetector:
                    x2=initial_boundary_starting_pad + initial_boundary_width + secondary_boundary_width,
                    y2=up_down_pad_secondary + secondary_boundary_height,
                    name="Upper Secondary"))
+
     def process_frame(self, frame):
         blurred, edges = self.canny_edge_detection(frame)
         erosion = self.fill_edges(edges)
