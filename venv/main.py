@@ -57,7 +57,6 @@ class Region:
         green_pixels = cv2.countNonZero(mask_green)
 
         self.red_green_ratio = red_pixels / green_pixels if green_pixels != 0 else red_pixels
-        #TODO: Add a check for red_pixels == 0
 
     def calculate_red_green_cells(self):
         if self.red_green_ratio > 0:
