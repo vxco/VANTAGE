@@ -281,6 +281,11 @@ class MainWindow(QMainWindow):
         threshold_group.setLayout(threshold_layout)
         right_panel.addWidget(threshold_group)
 
+        # Settings Button
+        self.settings_button = QPushButton('Settings')
+        self.settings_button.setStyleSheet("background-color: #3498db; color: white;")
+        right_panel.addWidget(self.settings_button)
+
         # Quit button
         self.quit_button = QPushButton('Quit')
         self.quit_button.clicked.connect(self.close)
@@ -335,6 +340,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.cap.release()
+
 
 
 def main():
