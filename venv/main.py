@@ -62,6 +62,9 @@ class Region:
         if self.red_green_ratio > 0:
             self.red_cells = round(self.cell_count * (self.red_green_ratio / (1 + self.red_green_ratio)))
             self.green_cells = self.cell_count - self.red_cells
+        elif self.red_green_ratio == 0:
+            self.red_cells = 0
+            self.green_cells = self.cell_count
         else:
             self.red_cells = self.cell_count
             self.green_cells = 0
