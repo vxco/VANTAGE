@@ -49,36 +49,45 @@ class CellDetector:
         secondary_boundary_width = self.aspect_multiplier * 12
         beginning_box_width = initial_boundary_starting_pad + (self.aspect_multiplier * 1.5)
         tube_pad = self.aspect_multiplier * 5
-
         initial_boundary_width = (self.aspect_width - (initial_boundary_starting_pad / self.aspect_multiplier) - (
-                    (tube_pad / self.aspect_multiplier) + (
-                        secondary_boundary_width / self.aspect_multiplier))) * self.aspect_multiplier
+                (tube_pad / self.aspect_multiplier) + (
+                secondary_boundary_width / self.aspect_multiplier))) * self.aspect_multiplier
 
-        # Create regions
-        self.regions.append(Region(0, self.img_height - (up_down_pad_initial + initial_boundary_height), beginning_box_width,
-                                    self.img_height - up_down_pad_initial,
-                                    "Beginning Box"))
+        # region constructor: Region(x1, y1, x2, y2, name)
+        self.regions.append(
+            Region(x1=0,
+                   y1=up_down_pad_initial + initial_boundary_height,
+                   x2=beginning_box_width,
+                   y2=self.img_height - (up_down_pad_initial + initial_boundary_height),
+                   name="Beginning Box"))
 
-        self.regions.append(Region(initial_boundary_starting_pad, self.img_height - (up_down_pad_initial + initial_boundary_height),
-                                   initial_boundary_starting_pad + initial_boundary_width, self.img_height - up_down_pad_initial,
-                                   "Lower Initial"))
+        self.regions.append(
+            Region(x1=initial_boundary_starting_pad,
+                   y1=self.img_height - (up_down_pad_initial + initial_boundary_height),
+                   x2=initial_boundary_starting_pad + initial_boundary_width,
+                   y2=self.img_height - up_down_pad_initial,
+                   name="Lower Initial"))
 
-        self.regions.append(Region(initial_boundary_starting_pad, up_down_pad_initial,
-                                   initial_boundary_starting_pad + initial_boundary_width,
-                                   up_down_pad_initial + initial_boundary_height,
-                                   "Upper Initial"))
+        self.regions.append(
+            Region(x1=initial_boundary_starting_pad,
+                   y1=up_down_pad_initial,
+                   x2=initial_boundary_starting_pad + initial_boundary_width,
+                   y2=up_down_pad_initial + initial_boundary_height,
+                   name="Upper Initial"))
 
-        self.regions.append(Region(initial_boundary_starting_pad + initial_boundary_width,
-                                   self.img_height - (up_down_pad_secondary + secondary_boundary_height),
-                                   initial_boundary_starting_pad + initial_boundary_width + secondary_boundary_width,
-                                   self.img_height - up_down_pad_secondary,
-                                   "Lower Secondary"))
+        self.regions.append(
+            Region(x1=initial_boundary_starting_pad + initial_boundary_width,
+                   y1=self.img_height - (up_down_pad_secondary + secondary_boundary_height),
+                   x2=initial_boundary_starting_pad + initial_boundary_width + secondary_boundary_width,
+                   y2=self.img_height - up_down_pad_secondary,
+                   name="Lower Secondary"))
 
-        self.regions.append(Region(initial_boundary_starting_pad + initial_boundary_width, up_down_pad_secondary,
-                                   initial_boundary_starting_pad + initial_boundary_width + secondary_boundary_width,
-                                   up_down_pad_secondary + secondary_boundary_height,
-                                   "Upper Secondary"))
-
+        self.regions.append(
+            Region(x1=initial_boundary_starting_pad + initial_boundary_width,
+                   y1=up_down_pad_secondary,
+                   x2=initial_boundary_starting_pad + initial_boundary_width + secondary_boundary_width,
+                   y2=up_down_pad_secondary + secondary_boundary_height,
+                   name="Upper Secondary"))
     def process_frame(self, frame):
         blurred, edges = self.canny_edge_detection(frame)
         erosion = self.fill_edges(edges)
@@ -93,6 +102,7 @@ class CellDetector:
         blurred = cv2.GaussianBlur(src=frame, ksize=(3, 5), sigmaX=0.8)
         edges = cv2.Canny(image=blurred, threshold1=100, threshold2=200)
         return blurred, edges
+
     def fill_edges(self, edges):
         _, thresh = cv2.threshold(edges, 100, 255, cv2.THRESH_BINARY)
         rect = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
