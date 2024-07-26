@@ -9,8 +9,6 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 
 
-
-
 def list_ports():
     is_working = True
     dev_port = 0
@@ -31,7 +29,6 @@ def list_ports():
                 available_ports.append(dev_port)
         dev_port +=1
     return available_ports,working_ports
-
 
 
 class Region:
@@ -119,7 +116,7 @@ class CellDetector:
         self.aspect_multiplier = aspect_multiplier
         self.img_width = aspect_width * aspect_multiplier
         self.img_height = aspect_height * aspect_multiplier
-        self.one_cell_pixel_count = 125
+        self.one_cell_pixel_count = 310
         self.regions = []
         self.setup_regions()
 
@@ -220,7 +217,7 @@ class MainWindow(QMainWindow):
         self.timer.start(30)  # Update every 30 ms
 
     def initUI(self):
-        self.setWindowTitle('VANTAGE - Vision Assisted Nanoparticle Tracking and Guided Extraction')
+        self.setWindowTitle('VANTAGE - Vision Assisted Nano-particle Tracking and Guided Extraction')
         self.setFixedSize(1200, 800)
         self.setStyleSheet("background-color: #F89880;")
 
@@ -229,8 +226,13 @@ class MainWindow(QMainWindow):
 
         main_layout = QHBoxLayout()
 
-        # Left panel for video feed
+        # text based logo
         left_panel = QVBoxLayout()
+        '''logo = QLabel("VANTAGE")
+        logo.setStyleSheet("font-size: 30px; font-weight: bold; color: #202020;")
+        left_panel.addWidget(logo)'''
+
+        # Left panel for video feed
         self.image_label = QLabel(self)
         self.image_label.setFixedSize(800, 600)
         self.image_label.setStyleSheet("border: 2px solid #3498db;")
@@ -269,8 +271,10 @@ class MainWindow(QMainWindow):
         count_group.setLayout(count_layout)
         right_panel.addWidget(count_group)
 
+
+
         # Threshold control
-        threshold_group = QGroupBox("Threshold Control")
+        '''threshold_group = QGroupBox("Threshold Control")
         threshold_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         threshold_layout = QVBoxLayout()
         self.threshold_slider = QSlider(Qt.Horizontal)
@@ -279,11 +283,11 @@ class MainWindow(QMainWindow):
         self.threshold_slider.valueChanged.connect(self.update_threshold)
         threshold_layout.addWidget(self.threshold_slider)
         threshold_group.setLayout(threshold_layout)
-        right_panel.addWidget(threshold_group)
+        right_panel.addWidget(threshold_group)'''
 
         # Settings Button
-        self.settings_button = QPushButton('Settings')
-        self.settings_button.setStyleSheet("background-color: #3498db; color: white;")
+        self.settings_button = QPushButton('Settings (WIP)')
+        self.settings_button.setStyleSheet("background-color: #A0A0A1; color: #D0D0D0;")
         right_panel.addWidget(self.settings_button)
 
         # Quit button
@@ -332,7 +336,7 @@ class MainWindow(QMainWindow):
 
     def toggle_debug(self):
         self.debug_mode = not self.debug_mode
-        self.debug_button.setText('Disable Debug Mode' if self.debug_mode else 'Enable Debug Mode')
+        self.debug_button.setText('Disable Debug' if self.debug_mode else 'Enable Debug')
 
     def update_threshold(self):
         threshold = self.threshold_slider.value()
