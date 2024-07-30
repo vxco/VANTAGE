@@ -2,15 +2,13 @@ import cv2
 import numpy as np
 import sys
 from dataclasses import dataclass
-from PyQt5.QtCore import Qt, QTimer, QPointF, QRect
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath
+from PyQt5.QtCore import Qt, QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath, QLinearGradient
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QPushButton,
-    QRadioButton, QButtonGroup
+    QRadioButton, QButtonGroup, QSplashScreen
 )
-from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QSize
-from PyQt5.QtGui import QMovie
 
 
 @dataclass
@@ -20,6 +18,7 @@ class ParticleData:
     size: float
     color: str
     radius: int
+
 
 class ParticleAnalyzer:
     def __init__(self, min_size=30, max_size=600, threshold=20):
@@ -45,6 +44,7 @@ class ParticleAnalyzer:
             if self.min_size < (area := cv2.contourArea(contour)) < self.max_size
             for ((x, y), radius) in [cv2.minEnclosingCircle(contour)]
         ]
+
 
 class VideoWidgetWithOverlay(QLabel):
     def __init__(self, title):
@@ -131,6 +131,7 @@ class VideoWidgetWithOverlay(QLabel):
         self.red_boxes.clear()
         self.update()
 
+
 class ColorDetector:
     def __init__(self, initial_value):
         self.set_threshold(initial_value)
@@ -144,6 +145,7 @@ class ColorDetector:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, self.lower_threshold, self.upper_threshold)
         return cv2.bitwise_and(frame, frame, mask=mask)
+
 
 class ColorDetectionApp(QMainWindow):
     def __init__(self):
@@ -371,8 +373,63 @@ class ColorDetectionApp(QMainWindow):
         def closeEvent(self, event):
             self.cap.release()
 
+
+class FadingSplashScreen(QSplashScreen):
+    def __init__(self, logo_path):
+        # Create a pixmap with the desired size
+        pixmap = QPixmap(QSize(800, 400))  # Adjust size as needed
+
+        # Create a painter to draw on the pixmap
+        painter = QPainter(pixmap)
+
+        # Create and set up the gradient
+        gradient = QLinearGradient(0, 0, 0, pixmap.height())
+        gradient.setColorAt(0, QColor(230, 230, 250))  # Indigo
+        gradient.setColorAt(1, QColor(201, 160, 220))  # Blue Violet
+
+        # Fill the background with the gradient
+        painter.fillRect(pixmap.rect(), gradient)
+
+        # Load and draw the logo
+        logo = QPixmap(logo_path)
+        logo_rect = logo.rect()
+        logo_rect.moveCenter(pixmap.rect().center())
+        painter.drawPixmap(logo_rect, logo)
+
+        # End painting
+        painter.end()
+
+        super().__init__(pixmap)
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_anim.setDuration(1000)  # 1 second duration
+        self.fade_anim.setStartValue(1.0)
+        self.fade_anim.setEndValue(0.0)
+        self.fade_anim.setEasingCurve(QEasingCurve.OutQuad)
+
+    def fadeOut(self):
+        self.fade_anim.start()
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Create and show the splash screen
+    splash = FadingSplashScreen("vantage.png")  # Replace with your logo path
+    splash.show()
+
+    # Create the main window
     window = ColorDetectionApp()
-    window.show()
+
+
+    # Function to fade out splash and show main window
+    def showMain():
+        splash.fadeOut()
+        window.show()
+
+
+    # Timer to delay the appearance of the main window
+    QTimer.singleShot(2000, showMain)  # 2 seconds delay
+
     sys.exit(app.exec_())
+
