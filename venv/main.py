@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QPushButton,
     QRadioButton, QButtonGroup
 )
+from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtGui import QMovie
 
 
 @dataclass
@@ -154,7 +156,7 @@ class ColorDetectionApp(QMainWindow):
         self.main_layout = QHBoxLayout(self.central_widget)
 
         self.red_detector = ColorDetector(4)
-        self.green_detector = ColorDetector(33)
+        self.green_detector = ColorDetector(25)
 
         self.red_analyzer = ParticleAnalyzer()
         self.green_analyzer = ParticleAnalyzer()
@@ -193,7 +195,7 @@ class ColorDetectionApp(QMainWindow):
         splitter.addWidget(control_widget)
 
         self.setup_color_control("Red", self.red_detector, 4)
-        self.setup_color_control("Green", self.green_detector, 33)
+        self.setup_color_control("Green", self.green_detector, 25)
 
         self.particle_info_label = QLabel("Particle Information")
         self.particle_info_label.setStyleSheet("font-size: 14px; font-weight: bold;")
@@ -240,13 +242,34 @@ class ColorDetectionApp(QMainWindow):
         self.set_theme(self.dark_mode)
 
     def set_theme(self, is_dark):
-        style = """
-            QMainWindow, QWidget { background-color: %s; color: %s; }
-            QLabel, QCheckBox { color: %s; }
-            QGroupBox { border: 1px solid %s; }
-            QSlider::handle:horizontal { background-color: %s; }
+        if is_dark:
+            bg_color = "#2B2B2B"
+            text_color = "#FFFFFF"
+            border_color = "#555555"
+            handle_color = "#4A4A4A"
+        else:
+            bg_color = "#FFFFFF"
+            text_color = "#000000"
+            border_color = "#CCCCCC"
+            handle_color = "#DDDDDD"
+
+        style = f"""
+            QMainWindow, QWidget {{ background-color: {bg_color}; color: {text_color}; }}
+            QLabel, QCheckBox, QRadioButton, QPushButton {{ color: {text_color}; }}
+            QGroupBox {{ border: 1px solid {border_color}; margin-top: 0.5em; }}
+            QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }}
+            QSlider::handle:horizontal {{ background-color: {handle_color}; }}
+            QSplitter::handle {{ background-color: {border_color}; }}
         """
         self.setStyleSheet(style)
+
+        for widget in self.findChildren(QWidget):
+            widget.setStyleSheet(style)
+
+            # Update specific widgets that might need additional styling
+        self.original_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
+        self.red_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
+        self.green_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
 
     def set_roi_color(self, color):
         self.original_view.set_color(color)
