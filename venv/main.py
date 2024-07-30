@@ -1,14 +1,18 @@
 import cv2
 import numpy as np
 import sys
+import json
 from dataclasses import dataclass
 from PyQt5.QtCore import Qt, QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath, QLinearGradient
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QPushButton,
-    QRadioButton, QButtonGroup, QSplashScreen
+    QRadioButton, QButtonGroup, QSplashScreen, QFileDialog, QMenuBar,
+    QMenu, QAction
 )
+from PyQt5.QtWidgets import QFileDialog, QMenuBar, QMenu, QAction
+
 
 
 @dataclass
@@ -166,12 +170,25 @@ class ColorDetectionApp(QMainWindow):
         self.particle_info_label = None
         self.dark_mode = True
         self.setup_ui()
+        self.create_menu()
         self.set_theme(self.dark_mode)
 
         self.cap = cv2.VideoCapture(0)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
+
+    def create_menu(self):
+        menubar = self.menuBar()
+        file_menu = menubar.addMenu('File')
+
+        save_action = QAction('Save Settings', self)
+        save_action.triggered.connect(self.save_settings)
+        file_menu.addAction(save_action)
+
+        load_action = QAction('Load Settings', self)
+        load_action.triggered.connect(self.load_settings)
+        file_menu.addAction(load_action)
 
     def setup_ui(self):
         splitter = QSplitter(Qt.Horizontal)
@@ -295,6 +312,11 @@ class ColorDetectionApp(QMainWindow):
 
         slider.valueChanged.connect(update_value)
 
+        if color.lower() == 'red':
+            self.red_slider = slider
+        else:
+            self.green_slider = slider
+
         layout.addWidget(slider)
         layout.addWidget(value_label)
         group_box.setLayout(layout)
@@ -325,6 +347,37 @@ class ColorDetectionApp(QMainWindow):
 
             self.update_particle_info(red_particles, green_particles)
             self.check_beads_in_rois(red_particles + green_particles)
+
+    def save_settings(self):
+        settings = {
+            'red_slider_value': self.red_slider.value(),
+            'green_slider_value': self.green_slider.value(),
+            'green_boxes': [(box.x(), box.y(), box.width(), box.height()) for box in self.original_view.green_boxes],
+            'red_boxes': [(box.x(), box.y(), box.width(), box.height()) for box in self.original_view.red_boxes]
+        }
+
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Settings", "", "VANTAGE Settings (*.vts)")
+        if filename:
+            with open(filename, 'w') as f:
+                json.dump(settings, f)
+
+    def load_settings(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Load Settings", "", "VANTAGE Settings (*.vts)")
+        if filename:
+            with open(filename, 'r') as f:
+                settings = json.load(f)
+
+            self.red_slider.setValue(settings['red_slider_value'])
+            self.green_slider.setValue(settings['green_slider_value'])
+
+            # Update the detectors with the new values
+            self.red_detector.set_threshold(settings['red_slider_value'])
+            self.green_detector.set_threshold(settings['green_slider_value'])
+
+            self.original_view.green_boxes = [QRect(*box) for box in settings['green_boxes']]
+            self.original_view.red_boxes = [QRect(*box) for box in settings['red_boxes']]
+
+            self.original_view.update()
 
     def update_particle_info(self, red_particles, green_particles):
         red_count = len(red_particles)
@@ -376,27 +429,21 @@ class ColorDetectionApp(QMainWindow):
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
-        # Create a pixmap with the desired size
-        pixmap = QPixmap(QSize(800, 400))  # Adjust size as needed
+        pixmap = QPixmap(QSize(800, 400))
 
-        # Create a painter to draw on the pixmap
         painter = QPainter(pixmap)
 
-        # Create and set up the gradient
         gradient = QLinearGradient(0, 0, 0, pixmap.height())
-        gradient.setColorAt(0, QColor(230, 230, 250))  # Indigo
-        gradient.setColorAt(1, QColor(201, 160, 220))  # Blue Violet
+        gradient.setColorAt(0, QColor(230, 230, 250))
+        gradient.setColorAt(1, QColor(201, 160, 220))
 
-        # Fill the background with the gradient
         painter.fillRect(pixmap.rect(), gradient)
 
-        # Load and draw the logo
         logo = QPixmap(logo_path)
         logo_rect = logo.rect()
         logo_rect.moveCenter(pixmap.rect().center())
         painter.drawPixmap(logo_rect, logo)
 
-        # End painting
         painter.end()
 
         super().__init__(pixmap)
