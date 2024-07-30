@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import sys
 import json
+import platform
 from dataclasses import dataclass
 from PyQt5.QtCore import Qt, QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath, QLinearGradient
@@ -9,9 +10,18 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QPushButton,
     QRadioButton, QButtonGroup, QSplashScreen, QFileDialog, QMenuBar,
-    QMenu, QAction
+    QMenu, QAction, QMessageBox
 )
 from PyQt5.QtWidgets import QFileDialog, QMenuBar, QMenu, QAction
+
+if platform.system() == 'Darwin':  # macOS
+    from Foundation import NSBundle
+    bundle = NSBundle.mainBundle()
+    info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
+    info['CFBundleName'] = "VANTAGE"
+
+VERSION = "2.1.4b"
+
 
 
 
@@ -154,7 +164,6 @@ class ColorDetector:
 class ColorDetectionApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("VANTAGE 2.0 - Vision Assisted Nano-particle Tracking and Guided Extraction")
         self.setGeometry(100, 100, 1200, 800)
 
         self.central_widget = QWidget()
@@ -189,6 +198,12 @@ class ColorDetectionApp(QMainWindow):
         load_action = QAction('Load Settings', self)
         load_action.triggered.connect(self.load_settings)
         file_menu.addAction(load_action)
+
+        help_menu = menubar.addMenu('Help')
+
+        about_action = QAction('About', self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
 
     def setup_ui(self):
         splitter = QSplitter(Qt.Horizontal)
@@ -348,6 +363,10 @@ class ColorDetectionApp(QMainWindow):
             self.update_particle_info(red_particles, green_particles)
             self.check_beads_in_rois(red_particles + green_particles)
 
+    def show_about(self):
+        about_text = f"VANTAGE \n\nVersion: {VERSION}\n\nVision Assisted Nano-particle Tracking and Guided Extraction\n\n Developed by Alfa Ozaltin and Nil Ertok @ Stanford University"
+        QMessageBox.about(self, "About VANTAGE", about_text)
+
     def save_settings(self):
         settings = {
             'red_slider_value': self.red_slider.value(),
@@ -449,7 +468,7 @@ class FadingSplashScreen(QSplashScreen):
         super().__init__(pixmap)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_anim.setDuration(1000)  # 1 second duration
+        self.fade_anim.setDuration(2000)
         self.fade_anim.setStartValue(1.0)
         self.fade_anim.setEndValue(0.0)
         self.fade_anim.setEasingCurve(QEasingCurve.OutQuad)
@@ -460,23 +479,21 @@ class FadingSplashScreen(QSplashScreen):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setApplicationName("VANTAGE")
 
-    # Create and show the splash screen
-    splash = FadingSplashScreen("vantage.png")  # Replace with your logo path
+    splash = FadingSplashScreen("vantage.png")
     splash.show()
 
-    # Create the main window
     window = ColorDetectionApp()
 
 
-    # Function to fade out splash and show main window
     def showMain():
         splash.fadeOut()
         window.show()
 
 
-    # Timer to delay the appearance of the main window
-    QTimer.singleShot(2000, showMain)  # 2 seconds delay
+    QTimer.singleShot(3500, showMain)
 
     sys.exit(app.exec_())
+
 
