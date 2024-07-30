@@ -3,9 +3,10 @@ import os
 import platform
 import sys
 from dataclasses import dataclass
+import ctypes
+import markdown
 
 import cv2
-import markdown
 import numpy as np
 from PyQt5.QtCore import QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
 from PyQt5.QtCore import Qt
@@ -425,7 +426,6 @@ class ColorDetectionApp(QMainWindow):
         for widget in self.findChildren(QWidget):
             widget.setStyleSheet(style)
 
-            # Update specific widgets that might need additional styling
         self.original_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
         self.red_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
         self.green_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
@@ -608,13 +608,31 @@ class FadingSplashScreen(QSplashScreen):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
-    app.setWindowIcon(QIcon("vantage.png"))
+
+    app.setStyle("Fusion")
+
+    app_icon = QIcon()
+    if platform.system() == 'Windows':
+
+        myappid = f'vxsoftware.vantage.beta.214b'  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        icon_path = 'vantage.ico'
+    else:
+        icon_path = 'vantage.png'
+
+    app_icon.addFile(icon_path, QSize(16, 16))
+    app_icon.addFile(icon_path, QSize(24, 24))
+    app_icon.addFile(icon_path, QSize(32, 32))
+    app_icon.addFile(icon_path, QSize(48, 48))
+    app_icon.addFile(icon_path, QSize(256, 256))
+    app.setWindowIcon(app_icon)
 
     splash = FadingSplashScreen("vantage_logo.png")
     splash.show()
 
     window = ColorDetectionApp()
-    window.setWindowIcon(QIcon("vantage.png"))
+    window.setWindowIcon(app_icon)
+
 
     def showMain():
         splash.fadeOut()
@@ -624,5 +642,4 @@ if __name__ == "__main__":
     QTimer.singleShot(3500, showMain)
 
     sys.exit(app.exec_())
-
 
