@@ -1,18 +1,21 @@
-import cv2
-import numpy as np
-import sys
 import json
+import os
 import platform
+import sys
 from dataclasses import dataclass
-from PyQt5.QtCore import Qt, QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath, QLinearGradient
+
+import cv2
+import markdown
+import numpy as np
+from PyQt5.QtCore import QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette,  QIcon
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QPushButton,
-    QRadioButton, QButtonGroup, QSplashScreen, QFileDialog, QMenuBar,
-    QMenu, QAction, QMessageBox
+    QApplication, QMainWindow, QWidget, QHBoxLayout,
+    QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton, QButtonGroup, QSplashScreen, QMessageBox
 )
-from PyQt5.QtWidgets import QFileDialog, QMenuBar, QMenu, QAction
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton, QTextBrowser
+from PyQt5.QtWidgets import QFileDialog, QAction
 
 if platform.system() == 'Darwin':  # macOS
     from Foundation import NSBundle
@@ -161,6 +164,124 @@ class ColorDetector:
         return cv2.bitwise_and(frame, frame, mask=mask)
 
 
+
+class UserManualDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("User Manual")
+        self.setGeometry(100, 100, 800, 600)
+
+        layout = QVBoxLayout()
+
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search...")
+        layout.addWidget(self.search_bar)
+
+        # Search button
+        search_button = QPushButton("Search")
+        search_button.clicked.connect(self.search_content)
+        layout.addWidget(search_button)
+
+        # Text browser for rendered markdown
+        self.text_browser = QTextBrowser()
+        self.text_browser.setOpenExternalLinks(True)
+        layout.addWidget(self.text_browser)
+
+        self.setLayout(layout)
+
+        self.load_manual()
+
+    def load_manual(self):
+        manual_path = os.path.join(os.path.dirname(__file__), 'usermanual.md')
+        try:
+            with open(manual_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+
+                # Convert markdown to HTML with extended features
+                html = markdown.markdown(content, extensions=['fenced_code', 'codehilite', 'tables'])
+
+                # Get the application's palette
+                palette = QApplication.palette()
+
+                # Determine if we're in dark mode
+                is_dark = palette.color(QPalette.Window).lightness() < 128
+
+                # Set colors based on the theme
+                if is_dark:
+                    bg_color = palette.color(QPalette.Window).name()
+                    text_color = palette.color(QPalette.WindowText).name()
+                    heading_color = "#88CCFF"
+                    code_bg_color = "#2A2A2A"
+                else:
+                    bg_color = palette.color(QPalette.Window).name()
+                    text_color = palette.color(QPalette.WindowText).name()
+                    heading_color = "#333366"
+                    code_bg_color = "#F0F0F0"
+
+                css = f"""
+                <style>
+                    body {{ 
+                        font-family: Arial, sans-serif; 
+                        line-height: 1.6; 
+                        background-color: {bg_color}; 
+                        color: {text_color}; 
+                    }}
+                    h1, h2, h3 {{ color: {heading_color}; }}
+                    code {{ 
+                        background-color: {code_bg_color}; 
+                        padding: 2px 4px; 
+                        border-radius: 4px; 
+                    }}
+                    pre {{ 
+                        background-color: {code_bg_color}; 
+                        padding: 10px; 
+                        border-radius: 4px; 
+                        overflow-x: auto; 
+                    }}
+                    pre code {{ 
+                        background-color: transparent; 
+                        padding: 0; 
+                    }}
+                    a {{ color: {heading_color}; }}
+                    table {{
+        border-collapse: collapse;
+        margin: 15px 0;
+        width: 100%;
+    }}
+    th, td {{
+        border: 1px solid {text_color};
+        padding: 8px;
+        text-align: left;
+    }}
+    th {{
+        background-color: {code_bg_color};
+        font-weight: bold;
+    }}
+                </style>
+                """
+
+                self.text_browser.setHtml(css + html)
+        except FileNotFoundError:
+            self.text_browser.setHtml("<h1>User manual file not found.</h1>")
+        except Exception as e:
+            self.text_browser.setHtml(f"<h1>An error occurred while reading the user manual:</h1><p>{str(e)}</p>")
+
+    def search_content(self):
+        search_text = self.search_bar.text()
+        if search_text:
+            # Clear previous search
+            cursor = self.text_browser.textCursor()
+            cursor.clearSelection()
+            self.text_browser.setTextCursor(cursor)
+
+            # Perform new search
+            found = self.text_browser.find(search_text)
+            if not found:
+                # If not found, show a message
+                self.text_browser.append(f"<br><i>Search term '{search_text}' not found.</i>")
+
+
 class ColorDetectionApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -204,6 +325,10 @@ class ColorDetectionApp(QMainWindow):
         about_action = QAction('About', self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+
+        user_manual_action = QAction('User Manual', self)
+        user_manual_action.triggered.connect(self.show_user_manual)
+        help_menu.addAction(user_manual_action)
 
     def setup_ui(self):
         splitter = QSplitter(Qt.Horizontal)
@@ -445,6 +570,9 @@ class ColorDetectionApp(QMainWindow):
         def closeEvent(self, event):
             self.cap.release()
 
+    def show_user_manual(self):
+        dialog = UserManualDialog(self)
+        dialog.exec_()
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
@@ -480,12 +608,13 @@ class FadingSplashScreen(QSplashScreen):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
+    app.setWindowIcon(QIcon("vantage.png"))
 
-    splash = FadingSplashScreen("vantage.png")
+    splash = FadingSplashScreen("vantage_logo.png")
     splash.show()
 
     window = ColorDetectionApp()
-
+    window.setWindowIcon(QIcon("vantage.png"))
 
     def showMain():
         splash.fadeOut()
