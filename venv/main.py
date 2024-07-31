@@ -21,14 +21,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QWidget
 
 
-
 if platform.system() == 'Darwin':  # macOS
     from Foundation import NSBundle
     bundle = NSBundle.mainBundle()
     info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
     info['CFBundleName'] = "VANTAGE"
 
-VERSION = "2.1.4b"
+VERSION = "3.0.1b"
 
 
 class RecentProjectsManager:
@@ -1141,6 +1140,7 @@ class ColorDetectionApp(QMainWindow):
         if self.main_menu:
             self.main_menu.show()
         event.accept()
+
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
