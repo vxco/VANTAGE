@@ -9,7 +9,11 @@ from PyQt5.QtWidgets import (
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
     QButtonGroup, QSplashScreen, QMessageBox, QDialog, QLineEdit,
     QPushButton, QTextBrowser, QFileDialog, QAction, QListWidget,
-    QInputDialog, QMenu, QFrame
+    QInputDialog, QMenu, QFrame, QDialogButtonBox, QSpinBox
+)
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QLabel, QPushButton, QListWidget, QSpacerItem, QSizePolicy
 )
 
 if platform.system() == 'Darwin':  # macOS
@@ -24,13 +28,82 @@ VERSION = "2.1.4b"
 class MainMenu(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint)
         self.setWindowTitle("VANTAGE - Vision Assisted Nano-particle Tracking and Guided Extraction")
-        self.setGeometry(100, 100, 800, 600)
+        self.setFixedSize(550, 450)
+
+        self.set_dark_theme()
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
 
+        title_bar = QWidget(self)
+        title_bar.setFixedHeight(30)
+        title_bar.setStyleSheet("""
+                    background-color: #202020;
+                """)
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(10, 0, 0, 0)
+        title_bar_layout.setSpacing(0)
+
+        title_label = QLabel("Vision Assisted Nano-particle Tracking and Guided Extraction")
+        title_label.setStyleSheet("color: white; font-weight: bold; padding-left: 10px;")
+        title_bar_layout.addWidget(title_label)
+
+        # Add spacer to push the close button to the right
+        title_bar_layout.addStretch()
+
+        minimize_button = QPushButton(self)
+        minimize_button.setIcon(QIcon("assets/minimize_icon.png"))
+        minimize_button.setFixedSize(30, 30)
+        minimize_button.setStyleSheet("""
+                                    QPushButton {
+                                        border: none;
+                                        padding: 0px;
+                                    }
+                                    QPushButton:hover {
+                                        background-color: #DC5F00;
+                                    }
+                                """)
+
+        minimize_button.clicked.connect(self.showMinimized)
+        title_bar_layout.addWidget(minimize_button)
+
+        # Create close button with custom icon
+        close_button = QPushButton(self)
+        close_button.setIcon(QIcon("assets/close_icon.png"))
+        close_button.setFixedSize(30, 30)
+        close_button.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        padding: 0px;
+                    }
+                    QPushButton:hover {
+                        background-color: #CD1818;
+                    }
+                """)
+        close_button.clicked.connect(self.close)
+        title_bar_layout.addWidget(close_button)
+
+
+
+        # Set up main layout
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Add title bar to main layout
+        main_layout.addWidget(title_bar)
+
+        # Content widget
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        main_layout.addWidget(content_widget)
+
+        # Logo
         logo_label = QLabel()
         original_pixmap = QPixmap("assets/v3/vtg_logo_text.png")
         image = original_pixmap.toImage()
@@ -39,51 +112,85 @@ class MainMenu(QMainWindow):
         arr = np.array(ptr).reshape(image.height(), image.width(), 4)
         arr[:, :, :3] = 255 - arr[:, :, :3]
         inverted_image = QImage(arr.data, arr.shape[1], arr.shape[0], QImage.Format_RGBA8888)
-        logo_pixmap = QPixmap.fromImage(inverted_image).scaled(400, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo_pixmap = QPixmap.fromImage(inverted_image).scaled(500, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
         logo_label.setPixmap(logo_pixmap)
-        layout.addWidget(logo_label, alignment=Qt.AlignCenter)
+        main_layout.addWidget(logo_label, alignment=Qt.AlignCenter)
 
+        # Add vertical spacer
+        main_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Recent Projects list
-        self.recent_projects_list = QListWidget()
-        self.recent_projects_list.itemDoubleClicked.connect(self.open_recent_project)
-        layout.addWidget(QLabel("Recent Projects:"))
-        layout.addWidget(self.recent_projects_list)
-
+        # Buttons
+        button_layout = QHBoxLayout()
         button_style = """
-                QPushButton {
-                    background-color: #4a4a4a;
-                    color: white;
-                    border: 2px solid #6a6a6a;
-                    border-radius: 10px;
-                    padding: 10px 20px;
-                    font-size: 16px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #5a5a5a;
-                    border: 2px solid #7a7a7a;
-                }
-                QPushButton:pressed {
-                    background-color: #3a3a3a;
-                }
-                """
+            QPushButton {
+                background-color: #4a4a4a;
+                color: white;
+                border: 2px solid #6a6a6a;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 16px;
+                font-weight: bold;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+                border: 2px solid #7a7a7a;
+            }
+            QPushButton:pressed {
+                background-color: #3a3a3a;
+            }
+        """
 
         create_project_btn = QPushButton("New Project")
         create_project_btn.setStyleSheet(button_style)
         create_project_btn.setCursor(Qt.PointingHandCursor)
         create_project_btn.clicked.connect(self.create_project)
-        layout.addWidget(create_project_btn)
 
-        # Create and style the Open Project button
         open_project_btn = QPushButton("Open Project")
         open_project_btn.setStyleSheet(button_style)
         open_project_btn.setCursor(Qt.PointingHandCursor)
         open_project_btn.clicked.connect(self.open_project)
-        layout.addWidget(open_project_btn)
+
+        button_layout.addWidget(create_project_btn)
+        button_layout.addWidget(open_project_btn)
+
+        main_layout.addLayout(button_layout)
+
+        # Add vertical spacer
+        main_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Recent Projects
+        recent_projects_label = QLabel("Recent Projects:")
+        recent_projects_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(recent_projects_label)
+
+        self.recent_projects_list = QListWidget()
+        self.recent_projects_list.setMaximumHeight(150)  # Limit the height of the list
+        self.recent_projects_list.itemDoubleClicked.connect(self.open_recent_project)
+        main_layout.addWidget(self.recent_projects_list)
+
+        # Style the recent projects list
+        self.recent_projects_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2d2d2d;
+                color: white;
+                border: 1px solid #3a3a3a;
+            }
+            QListWidget::item {
+                padding: 5px;
+            }
+            QListWidget::item:hover {
+                background-color: #3a3a3a;
+            }
+            QListWidget::item:selected {
+                background-color: #4a4a4a;
+            }
+        """)
 
         self.load_recent_projects()
+
+
 
     def open_project(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "VANTAGE Project (*.vtp)")
@@ -92,16 +199,50 @@ class MainMenu(QMainWindow):
                 settings = json.load(f)
             self.open_color_detection_app(settings['camera_port'], filename, settings)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = True
+            self.offset = event.pos()
+
+    def mouseMoveEvent(self, event):
+        if self.moving:
+            self.move(event.globalPos() - self.offset)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = False
+
     def create_project(self):
-        port, ok = QInputDialog.getInt(self, "Camera Port", "Enter the USB camera port:", 0, 0, 10)
-        if not ok:
-            return
+        dialog = DarkThemeDialog(self, "Create New Project")
+        layout = QVBoxLayout(dialog)
 
-        project_name, ok = QInputDialog.getText(self, "Project Name", "Enter the project name:")
-        if not ok or not project_name:
-            return
+        port_layout = QHBoxLayout()
+        port_label = QLabel("Camera Port:")
+        port_spinbox = QSpinBox()
+        port_spinbox.setRange(0, 10)
+        port_layout.addWidget(port_label)
+        port_layout.addWidget(port_spinbox)
+        layout.addLayout(port_layout)
 
-        self.open_color_detection_app(port, project_name, None)
+        name_layout = QHBoxLayout()
+        name_label = QLabel("Project Name:")
+        name_input = QLineEdit()
+        name_layout.addWidget(name_label)
+        name_layout.addWidget(name_input)
+        layout.addLayout(name_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        if dialog.exec_() == QDialog.Accepted:
+            port = port_spinbox.value()
+            project_name = name_input.text()
+            if project_name:
+                self.open_color_detection_app(port, project_name, None)
+            else:
+                self.show_message("Error", "Project name cannot be empty.")
 
     def open_recent_project(self, item):
         project_path = item.text()
@@ -155,6 +296,75 @@ class MainMenu(QMainWindow):
         recent_projects = [self.recent_projects_list.item(i).text() for i in range(self.recent_projects_list.count())]
         with open("recent_projects.json", "w") as f:
             json.dump(recent_projects, f)
+
+
+    def set_dark_theme(self):
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.WindowText, Qt.white)
+        dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
+        dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+        dark_palette.setColor(QPalette.Text, Qt.white)
+        dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ButtonText, Qt.white)
+        dark_palette.setColor(QPalette.BrightText, Qt.red)
+        dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+        self.setPalette(dark_palette)
+
+        self.setStyleSheet("""
+            QToolTip { 
+                color: #ffffff; 
+                background-color: #2a82da; 
+                border: 1px solid white; 
+            }
+            QLabel { 
+                color: white; 
+            }
+            QMessageBox { 
+                background-color: #2d2d2d; 
+            }
+            QMessageBox QLabel { 
+                color: white; 
+            }
+        """)
+
+class DarkThemeDialog(QDialog):
+    def __init__(self, parent=None, title=""):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2d2d2d;
+                color: white;
+            }
+            QLabel {
+                color: white;
+            }
+            QLineEdit, QSpinBox {
+                background-color: #3d3d3d;
+                color: white;
+                border: 1px solid #5d5d5d;
+                padding: 5px;
+            }
+            QPushButton {
+                background-color: #4a4a4a;
+                color: white;
+                border: 2px solid #6a6a6a;
+                border-radius: 5px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+            QPushButton:pressed {
+                background-color: #3a3a3a;
+            }
+        """)
+
 
 @dataclass
 class ParticleData:
@@ -865,6 +1075,6 @@ if __name__ == "__main__":
         splash.fadeOut()
         main_menu.show()
 
-    QTimer.singleShot(3500, showMainMenu)
+    QTimer.singleShot(1200, showMainMenu)
 
     sys.exit(app.exec_())
