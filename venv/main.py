@@ -1,22 +1,16 @@
-import json
-import os
-import platform
-import sys
+import json, os, platform, sys, ctypes
 from dataclasses import dataclass
-import ctypes
-import markdown
+import markdown, cv2, numpy as np
 
-import cv2
-import numpy as np
-from PyQt5.QtCore import QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette,  QIcon
+from PyQt5.QtCore import Qt, QTimer, QPointF, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout,
-    QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton, QButtonGroup, QSplashScreen, QMessageBox
+    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
+    QButtonGroup, QSplashScreen, QMessageBox, QDialog, QLineEdit,
+    QPushButton, QTextBrowser, QFileDialog, QAction, QListWidget,
+    QInputDialog, QMenu, QFrame
 )
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QPushButton, QTextBrowser
-from PyQt5.QtWidgets import QFileDialog, QAction
 
 if platform.system() == 'Darwin':  # macOS
     from Foundation import NSBundle
@@ -27,7 +21,140 @@ if platform.system() == 'Darwin':  # macOS
 VERSION = "2.1.4b"
 
 
+class MainMenu(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("VANTAGE - Vision Assisted Nano-particle Tracking and Guided Extraction")
+        self.setGeometry(100, 100, 800, 600)
 
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+
+        logo_label = QLabel()
+        original_pixmap = QPixmap("assets/v3/vtg_logo_text.png")
+        image = original_pixmap.toImage()
+        ptr = image.bits()
+        ptr.setsize(image.byteCount())
+        arr = np.array(ptr).reshape(image.height(), image.width(), 4)
+        arr[:, :, :3] = 255 - arr[:, :, :3]
+        inverted_image = QImage(arr.data, arr.shape[1], arr.shape[0], QImage.Format_RGBA8888)
+        logo_pixmap = QPixmap.fromImage(inverted_image).scaled(400, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        logo_label.setPixmap(logo_pixmap)
+        layout.addWidget(logo_label, alignment=Qt.AlignCenter)
+
+
+        # Recent Projects list
+        self.recent_projects_list = QListWidget()
+        self.recent_projects_list.itemDoubleClicked.connect(self.open_recent_project)
+        layout.addWidget(QLabel("Recent Projects:"))
+        layout.addWidget(self.recent_projects_list)
+
+        button_style = """
+                QPushButton {
+                    background-color: #4a4a4a;
+                    color: white;
+                    border: 2px solid #6a6a6a;
+                    border-radius: 10px;
+                    padding: 10px 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #5a5a5a;
+                    border: 2px solid #7a7a7a;
+                }
+                QPushButton:pressed {
+                    background-color: #3a3a3a;
+                }
+                """
+
+        create_project_btn = QPushButton("New Project")
+        create_project_btn.setStyleSheet(button_style)
+        create_project_btn.setCursor(Qt.PointingHandCursor)
+        create_project_btn.clicked.connect(self.create_project)
+        layout.addWidget(create_project_btn)
+
+        # Create and style the Open Project button
+        open_project_btn = QPushButton("Open Project")
+        open_project_btn.setStyleSheet(button_style)
+        open_project_btn.setCursor(Qt.PointingHandCursor)
+        open_project_btn.clicked.connect(self.open_project)
+        layout.addWidget(open_project_btn)
+
+        self.load_recent_projects()
+
+    def open_project(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "VANTAGE Project (*.vtp)")
+        if filename:
+            with open(filename, 'r') as f:
+                settings = json.load(f)
+            self.open_color_detection_app(settings['camera_port'], filename, settings)
+
+    def create_project(self):
+        port, ok = QInputDialog.getInt(self, "Camera Port", "Enter the USB camera port:", 0, 0, 10)
+        if not ok:
+            return
+
+        project_name, ok = QInputDialog.getText(self, "Project Name", "Enter the project name:")
+        if not ok or not project_name:
+            return
+
+        self.open_color_detection_app(port, project_name, None)
+
+    def open_recent_project(self, item):
+        project_path = item.text()
+        if os.path.exists(project_path):
+            with open(project_path, 'r') as f:
+                settings = json.load(f)
+            self.open_color_detection_app(settings['camera_port'], project_path, settings)
+        else:
+            QMessageBox.warning(self, "Error", f"Project file not found: {project_path}")
+            self.remove_recent_project(project_path)
+
+    def open_color_detection_app(self, port, project_path, settings=None):
+        self.color_detection_app = ColorDetectionApp(port, os.path.basename(project_path), settings, self)
+        self.color_detection_app.current_project_path = project_path
+        if settings:
+            self.color_detection_app.load_settings(settings)
+        self.color_detection_app.show()
+        self.hide()
+
+    def load_recent_projects(self):
+        # Load recent projects from a file
+        try:
+            with open("recent_projects.json", "r") as f:
+                recent_projects = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            recent_projects = []
+
+        if recent_projects:
+            self.recent_projects_list.addItems(recent_projects)
+        else:
+            self.recent_projects_list.addItem("im not a project, im here to fill the emptiness in your heart")
+
+    def remove_recent_project(self, project_path):
+        items = self.recent_projects_list.findItems(project_path, Qt.MatchExactly)
+        for item in items:
+            self.recent_projects_list.takeItem(self.recent_projects_list.row(item))
+
+    def add_recent_project(self, project_path):
+        items = self.recent_projects_list.findItems(project_path, Qt.MatchExactly)
+        if not items:
+            self.recent_projects_list.insertItem(0, project_path)
+            if self.recent_projects_list.count() > 10:  # Limit to 5 recent projects
+                self.recent_projects_list.takeItem(10)
+
+        # Save recent projects to file
+        recent_projects = [self.recent_projects_list.item(i).text() for i in range(self.recent_projects_list.count())]
+        with open("recent_projects.json", "w") as f:
+            json.dump(recent_projects, f)
+
+        # Save recent projects to file
+        recent_projects = [self.recent_projects_list.item(i).text() for i in range(self.recent_projects_list.count())]
+        with open("recent_projects.json", "w") as f:
+            json.dump(recent_projects, f)
 
 @dataclass
 class ParticleData:
@@ -65,6 +192,7 @@ class ParticleAnalyzer:
 
 
 class VideoWidgetWithOverlay(QLabel):
+    regionChanged = pyqtSignal()
     def __init__(self, title):
         super().__init__()
         self.setAlignment(Qt.AlignCenter)
@@ -111,6 +239,7 @@ class VideoWidgetWithOverlay(QLabel):
                 (self.green_boxes if self.current_color == 'green' else self.red_boxes).append(self.current_box)
             self.current_box = self.start_point = None
             self.update()
+            self.regionChanged.emit()  # Emit the signal when a region is drawn
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -141,6 +270,7 @@ class VideoWidgetWithOverlay(QLabel):
                 painter.setPen(QPen(Qt.green if self.current_color == 'green' else Qt.red, 2, Qt.SolidLine))
                 painter.drawRect(self.current_box)
 
+
     def set_color(self, color):
         self.current_color = color
 
@@ -163,7 +293,6 @@ class ColorDetector:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, self.lower_threshold, self.upper_threshold)
         return cv2.bitwise_and(frame, frame, mask=mask)
-
 
 
 class UserManualDialog(QDialog):
@@ -284,16 +413,25 @@ class UserManualDialog(QDialog):
 
 
 class ColorDetectionApp(QMainWindow):
-    def __init__(self):
+    def __init__(self, camera_port, project_name, settings=None, main_menu=None):
         super().__init__()
+        self.camera_port = camera_port
+        self.project_name = project_name
+        self.settings = settings or {}
+        self.main_menu = main_menu
+
+        self.unsaved_changes = False
+        self.update_title()
+
         self.setGeometry(100, 100, 1200, 800)
+        self.setWindowTitle(f"VANTAGE - {project_name}")
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QHBoxLayout(self.central_widget)
 
-        self.red_detector = ColorDetector(4)
-        self.green_detector = ColorDetector(25)
+        self.red_detector = ColorDetector(self.settings.get('red_slider_value', 0))
+        self.green_detector = ColorDetector(self.settings.get('green_slider_value', 0))
 
         self.red_analyzer = ParticleAnalyzer()
         self.green_analyzer = ParticleAnalyzer()
@@ -304,25 +442,48 @@ class ColorDetectionApp(QMainWindow):
         self.create_menu()
         self.set_theme(self.dark_mode)
 
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(self.camera_port)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
+        self.unsaved_changes = False
+        self.current_project_path = None
+        if settings:
+            self.current_project_path = project_name  # Assuming project_name is the full path when loading
+        self.update_title()
+
+        self.unsaved_changes = True if settings is None else False
+        self.current_project_path = None
+        self.update_title()
+        self.original_view.regionChanged.connect(self.on_region_changed)  # Connect the signal
+
+
+    def update_title(self):
+        title = f"VANTAGE - {self.project_name}"
+        if self.unsaved_changes:
+            title += " (unsaved changes)"
+        self.setWindowTitle(title)
+
+
     def create_menu(self):
         menubar = self.menuBar()
-        file_menu = menubar.addMenu('File')
 
-        save_action = QAction('Save Settings', self)
-        save_action.triggered.connect(self.save_settings)
+        file_menu = menubar.addMenu('File')
+        save_action = QAction('Save', self)
+        save_action.triggered.connect(self.save_project)
         file_menu.addAction(save_action)
 
-        load_action = QAction('Load Settings', self)
-        load_action.triggered.connect(self.load_settings)
-        file_menu.addAction(load_action)
+        save_as_action = QAction('Save As', self)
+        save_as_action.triggered.connect(self.save_project_as)
+        file_menu.addAction(save_as_action)
+
+        project_menu = menubar.addMenu('Project')
+        select_port_action = QAction('Select Camera Port', self)
+        select_port_action.triggered.connect(self.select_camera_port)
+        project_menu.addAction(select_port_action)
 
         help_menu = menubar.addMenu('Help')
-
         about_action = QAction('About', self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
@@ -430,11 +591,21 @@ class ColorDetectionApp(QMainWindow):
         self.red_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
         self.green_view.setStyleSheet(f"border: 2px solid {border_color}; background-color: black; color: white;")
 
+    def on_region_changed(self):
+        self.unsaved_changes = True
+        self.update_title()
+
     def set_roi_color(self, color):
         self.original_view.set_color(color)
+        self.unsaved_changes = True
+        self.update_title()
 
     def clear_rois(self):
         self.original_view.clear_boxes()
+        self.red_view.clear_boxes()
+        self.green_view.clear_boxes()
+        self.unsaved_changes = True
+        self.update_title()
 
     def setup_color_control(self, color, detector, initial_value):
         group_box = QGroupBox(f"{color} Control")
@@ -449,6 +620,8 @@ class ColorDetectionApp(QMainWindow):
         def update_value(value):
             value_label.setText(f"Value: {value}")
             detector.set_threshold(value)
+            self.unsaved_changes = True
+            self.update_title()
 
         slider.valueChanged.connect(update_value)
 
@@ -505,23 +678,19 @@ class ColorDetectionApp(QMainWindow):
             with open(filename, 'w') as f:
                 json.dump(settings, f)
 
-    def load_settings(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "Load Settings", "", "VANTAGE Settings (*.vts)")
-        if filename:
-            with open(filename, 'r') as f:
-                settings = json.load(f)
+    def load_settings(self, settings):
+        self.red_slider.setValue(settings.get('red_slider_value', 0))
+        self.green_slider.setValue(settings.get('green_slider_value', 0))
 
-            self.red_slider.setValue(settings['red_slider_value'])
-            self.green_slider.setValue(settings['green_slider_value'])
+        self.red_detector.set_threshold(settings.get('red_slider_value', 0))
+        self.green_detector.set_threshold(settings.get('green_slider_value', 0))
 
-            # Update the detectors with the new values
-            self.red_detector.set_threshold(settings['red_slider_value'])
-            self.green_detector.set_threshold(settings['green_slider_value'])
+        self.original_view.green_boxes = [QRect(*box) for box in settings.get('green_boxes', [])]
+        self.original_view.red_boxes = [QRect(*box) for box in settings.get('red_boxes', [])]
 
-            self.original_view.green_boxes = [QRect(*box) for box in settings['green_boxes']]
-            self.original_view.red_boxes = [QRect(*box) for box in settings['red_boxes']]
-
-            self.original_view.update()
+        self.original_view.update()
+        self.unsaved_changes = False
+        self.update_title()
 
     def update_particle_info(self, red_particles, green_particles):
         red_count = len(red_particles)
@@ -555,28 +724,86 @@ class ColorDetectionApp(QMainWindow):
         info_text = f"Green Count: {green_count}\nRed Count: {red_count}\nError Count: {error_count}"
         self.region_display.setText(info_text)
 
-        def update_particle_info(self, red_particles, green_particles):
-            red_count = len(red_particles)
-            green_count = len(green_particles)
+    def closeEvent(self, event):
+        if self.unsaved_changes:
+            reply = QMessageBox.question(self, 'Save Project',
+                                         "Do you want to save the project before closing?",
+                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
 
-            red_avg_size = sum(p.size for p in red_particles) / red_count if red_count > 0 else 0
-            green_avg_size = sum(p.size for p in green_particles) / green_count if green_count > 0 else 0
+            if reply == QMessageBox.Yes:
+                self.save_project()
+                event.accept()
+            elif reply == QMessageBox.No:
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
-            info_text = f"Red Particles: {red_count} (Avg Size: {red_avg_size:.2f})\n"
-            info_text += f"Green Particles: {green_count} (Avg Size: {green_avg_size:.2f})"
-
-            self.particle_info_label.setText(info_text)
-
-        def closeEvent(self, event):
+        if event.isAccepted():
             self.cap.release()
+            if self.main_menu:
+                self.main_menu.show()
+
+    def save_project(self):
+        if self.current_project_path:
+            self._save_project(self.current_project_path)
+        else:
+            suggested_name = f"{self.project_name}.vtp" if not self.project_name.endswith('.vtp') else self.project_name
+            filename, _ = QFileDialog.getSaveFileName(self, "Save Project", suggested_name, "VANTAGE Project (*.vtp)")
+            if filename:
+                if not filename.endswith('.vtp'):
+                    filename += '.vtp'
+                self._save_project(filename)
+
+    def _save_project(self, filename):
+        if not filename.endswith('.vtp'):
+            filename += '.vtp'
+
+        settings = {
+            'camera_port': self.camera_port,
+            'red_slider_value': self.red_slider.value(),
+            'green_slider_value': self.green_slider.value(),
+            'green_boxes': [box.getRect() for box in self.original_view.green_boxes],
+            'red_boxes': [box.getRect() for box in self.original_view.red_boxes]
+        }
+        with open(filename, 'w') as f:
+            json.dump(settings, f)
+        self.current_project_path = os.path.abspath(filename)
+        self.project_name = os.path.basename(filename)
+        self.unsaved_changes = False
+        self.update_title()
+        if self.main_menu:
+            self.main_menu.add_recent_project(self.current_project_path)
+        QMessageBox.information(self, "Project Saved", f"Project saved successfully to {self.project_name}")
+
+    def save_project_as(self):
+        suggested_name = f"{self.project_name}.vtp" if not self.project_name.endswith('.vtp') else self.project_name
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Project", suggested_name, "VANTAGE Project (*.vtp)")
+        if filename:
+            if not filename.endswith('.vtp'):
+                filename += '.vtp'
+            self._save_project(filename)
+
+    def select_camera_port(self):
+        port, ok = QInputDialog.getInt(self, "Camera Port", "Enter the USB camera port:", self.camera_port, 0, 10)
+        if ok:
+            self.camera_port = port
+            self.cap.release()
+            self.cap = cv2.VideoCapture(self.camera_port)
+            self.unsaved_changes = True
+            self.update_title()
+
+
 
     def show_user_manual(self):
         dialog = UserManualDialog(self)
         dialog.exec_()
 
+
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
-        pixmap = QPixmap(QSize(800, 400))
+        pixmap = QPixmap(QSize(600, 300))  # Reduced size of the splash screen
 
         painter = QPainter(pixmap)
 
@@ -587,9 +814,10 @@ class FadingSplashScreen(QSplashScreen):
         painter.fillRect(pixmap.rect(), gradient)
 
         logo = QPixmap(logo_path)
-        logo_rect = logo.rect()
+        scaled_logo = logo.scaled(520, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo_rect = scaled_logo.rect()
         logo_rect.moveCenter(pixmap.rect().center())
-        painter.drawPixmap(logo_rect, logo)
+        painter.drawPixmap(logo_rect, scaled_logo)
 
         painter.end()
 
@@ -605,6 +833,7 @@ class FadingSplashScreen(QSplashScreen):
         self.fade_anim.start()
 
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
@@ -613,12 +842,11 @@ if __name__ == "__main__":
 
     app_icon = QIcon()
     if platform.system() == 'Windows':
-
         myappid = f'vxsoftware.vantage.beta.214b'  # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         icon_path = 'vantage.ico'
     else:
-        icon_path = 'vantage.png'
+        icon_path = 'assets/v3/vtg_icon_comet.png'
 
     app_icon.addFile(icon_path, QSize(16, 16))
     app_icon.addFile(icon_path, QSize(24, 24))
@@ -627,19 +855,16 @@ if __name__ == "__main__":
     app_icon.addFile(icon_path, QSize(256, 256))
     app.setWindowIcon(app_icon)
 
-    splash = FadingSplashScreen("vantage_logo.png")
+    splash = FadingSplashScreen("assets/v3/vtg_logo_full_splash")
     splash.show()
 
-    window = ColorDetectionApp()
-    window.setWindowIcon(app_icon)
+    main_menu = MainMenu()
+    main_menu.setWindowIcon(app_icon)
 
-
-    def showMain():
+    def showMainMenu():
         splash.fadeOut()
-        window.show()
+        main_menu.show()
 
-
-    QTimer.singleShot(3500, showMain)
+    QTimer.singleShot(3500, showMainMenu)
 
     sys.exit(app.exec_())
-
