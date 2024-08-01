@@ -32,7 +32,7 @@ if platform.system() == 'Darwin':  # macOS
     info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
     info['CFBundleName'] = "VANTAGE"
 
-VERSION = "3.0.1b"
+VERSION = "3.1.1b"
 
 
 class PreferencesDialog(QDialog):
@@ -152,12 +152,12 @@ class ProjectSettingsDialog(QDialog):
         layout = QFormLayout()
 
         self.min_particle_size = QSpinBox()
-        self.min_particle_size.setRange(1, 1000)
-        self.min_particle_size.setValue(self.current_settings.get('min_particle_size', 30))
+        self.min_particle_size.setRange(1, 249000)
+        self.min_particle_size.setValue(self.current_settings.get('min_particle_size', 300))
 
         self.max_particle_size = QSpinBox()
-        self.max_particle_size.setRange(1, 10000)
-        self.max_particle_size.setValue(self.current_settings.get('max_particle_size', 600))
+        self.max_particle_size.setRange(1, 250000)
+        self.max_particle_size.setValue(self.current_settings.get('max_particle_size', 10000))
 
         layout.addRow("Min Particle Size:", self.min_particle_size)
         layout.addRow("Max Particle Size:", self.max_particle_size)
