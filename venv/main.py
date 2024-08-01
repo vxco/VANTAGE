@@ -4,6 +4,9 @@ import platform
 import sys
 import ctypes
 from dataclasses import dataclass
+import threading
+from queue import Queue
+import time
 
 import markdown
 import cv2
@@ -41,14 +44,7 @@ class PreferencesDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Create a tab widget
-        self.tab_widget = QTabWidget()
-
         self.setup_general_tab()
-        self.setup_camera_tab()
-
-        # Add the tab widget to the main layout
-        layout.addWidget(self.tab_widget)
 
         # Add OK and Cancel buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -68,39 +64,22 @@ class PreferencesDialog(QDialog):
         location_layout.addWidget(self.default_project_location)
         location_layout.addWidget(browse_button)
 
-        self.auto_save_interval = QSpinBox()
-        self.auto_save_interval.setRange(1, 60)
-        self.auto_save_interval.setValue(int(self.settings.value("auto_save_interval", 5)))
-
-        general_layout.addRow("Default Project Location:", location_layout)
-        general_layout.addRow("Auto-save Interval (minutes):", self.auto_save_interval)
-
-        self.tab_widget.addTab(general_tab, "General")
-
-    def setup_camera_tab(self):
-        camera_tab = QWidget()
-        camera_layout = QFormLayout(camera_tab)
-
         self.default_camera_port = QSpinBox()
         self.default_camera_port.setRange(0, 10)
         self.default_camera_port.setValue(int(self.settings.value("default_camera_port", 0)))
 
         self.default_resolution = QLineEdit(self.settings.value("default_resolution", "1280x720"))
 
-        self.min_particle_size = QSpinBox()
-        self.min_particle_size.setRange(1, 1000)
-        self.min_particle_size.setValue(int(self.settings.value("min_particle_size", 30)))
+        self.auto_save_interval = QSpinBox()
+        self.auto_save_interval.setRange(1, 60)
+        self.auto_save_interval.setValue(int(self.settings.value("auto_save_interval", 5)))
 
-        self.max_particle_size = QSpinBox()
-        self.max_particle_size.setRange(1, 10000)
-        self.max_particle_size.setValue(int(self.settings.value("max_particle_size", 600)))
+        general_layout.addRow("Default Project Location:", location_layout)
+        general_layout.addRow("Default Camera Port:", self.default_camera_port)
+        general_layout.addRow("Default Resolution:", self.default_resolution)
+        general_layout.addRow("Auto-save Interval (minutes):", self.auto_save_interval)
 
-        camera_layout.addRow("Default Camera Port:", self.default_camera_port)
-        camera_layout.addRow("Default Resolution:", self.default_resolution)
-        camera_layout.addRow("Min Particle Size:", self.min_particle_size)
-        camera_layout.addRow("Max Particle Size:", self.max_particle_size)
-
-        self.tab_widget.addTab(camera_tab, "Camera")
+        self.layout().addWidget(general_tab)
 
     def browse_project_location(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Default Project Location")
@@ -109,12 +88,92 @@ class PreferencesDialog(QDialog):
 
     def save_preferences(self):
         self.settings.setValue("default_project_location", self.default_project_location.text())
-        self.settings.setValue("auto_save_interval", self.auto_save_interval.value())
         self.settings.setValue("default_camera_port", self.default_camera_port.value())
         self.settings.setValue("default_resolution", self.default_resolution.text())
-        self.settings.setValue("min_particle_size", self.min_particle_size.value())
-        self.settings.setValue("max_particle_size", self.max_particle_size.value())
+        self.settings.setValue("auto_save_interval", self.auto_save_interval.value())
         self.accept()
+
+
+class ProjectSettingsDialog(QDialog):
+    def __init__(self, parent=None, current_settings=None):
+        super().__init__(parent)
+        self.setWindowTitle("Project Settings")
+        self.setMinimumSize(400, 300)
+        self.current_settings = current_settings or {}
+
+        layout = QVBoxLayout(self)
+
+        self.setup_camera_settings()
+        self.setup_color_detection_settings()
+        self.setup_particle_analysis_settings()
+
+        # Add OK and Cancel buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def setup_camera_settings(self):
+        group_box = QGroupBox("Camera Settings")
+        layout = QFormLayout()
+
+        self.camera_port = QSpinBox()
+        self.camera_port.setRange(0, 10)
+        self.camera_port.setValue(self.current_settings.get('camera_port', 0))
+
+        self.resolution = QLineEdit(self.current_settings.get('resolution', '1280x720'))
+
+        layout.addRow("Camera Port:", self.camera_port)
+        layout.addRow("Resolution:", self.resolution)
+
+        group_box.setLayout(layout)
+        self.layout().addWidget(group_box)
+
+    def setup_color_detection_settings(self):
+        group_box = QGroupBox("Color Detection Settings")
+        layout = QFormLayout()
+
+        self.red_threshold = QSlider(Qt.Horizontal)
+        self.red_threshold.setRange(0, 100)
+        self.red_threshold.setValue(self.current_settings.get('red_threshold', 20))
+
+        self.green_threshold = QSlider(Qt.Horizontal)
+        self.green_threshold.setRange(0, 100)
+        self.green_threshold.setValue(self.current_settings.get('green_threshold', 20))
+
+        layout.addRow("Red Threshold:", self.red_threshold)
+        layout.addRow("Green Threshold:", self.green_threshold)
+
+        group_box.setLayout(layout)
+        self.layout().addWidget(group_box)
+
+    def setup_particle_analysis_settings(self):
+        group_box = QGroupBox("Particle Analysis Settings")
+        layout = QFormLayout()
+
+        self.min_particle_size = QSpinBox()
+        self.min_particle_size.setRange(1, 1000)
+        self.min_particle_size.setValue(self.current_settings.get('min_particle_size', 30))
+
+        self.max_particle_size = QSpinBox()
+        self.max_particle_size.setRange(1, 10000)
+        self.max_particle_size.setValue(self.current_settings.get('max_particle_size', 600))
+
+        layout.addRow("Min Particle Size:", self.min_particle_size)
+        layout.addRow("Max Particle Size:", self.max_particle_size)
+
+        group_box.setLayout(layout)
+        self.layout().addWidget(group_box)
+
+    def get_settings(self):
+        return {
+            'camera_port': self.camera_port.value(),
+            'resolution': self.resolution.text(),
+            'red_threshold': self.red_threshold.value(),
+            'green_threshold': self.green_threshold.value(),
+            'min_particle_size': self.min_particle_size.value(),
+            'max_particle_size': self.max_particle_size.value(),
+        }
 
 
 class RecentProjectsManager:
@@ -885,13 +944,22 @@ class UserManualDialog(QDialog):
 
 class VideoProcessor:
     def __init__(self, camera_port, width, height):
-        self.cap = cv2.VideoCapture(camera_port)
+        self.camera_port = camera_port
+        self.width = width
+        self.height = height
+        self.cap = cv2.VideoCapture(self.camera_port)
         self.set_resolution(width, height)
         self.red_detector = ColorDetector(0)
         self.green_detector = ColorDetector(0)
         self.red_analyzer = ParticleAnalyzer()
         self.green_analyzer = ParticleAnalyzer()
 
+    def set_camera_port(self, camera_port):
+        if camera_port != self.camera_port:
+            self.camera_port = camera_port
+            self.cap.release()
+            self.cap = cv2.VideoCapture(self.camera_port)
+            self.set_resolution(self.width, self.height)
 
     def set_resolution(self, width, height):
         self.width = width
@@ -905,13 +973,15 @@ class VideoProcessor:
             return None, [], []
 
         frame = cv2.resize(frame, (self.width, self.height))
+
+        # Process red particles
         red_frame = self.red_detector.detect(frame, 'red')
-        green_frame = self.green_detector.detect(frame, 'green')
-
         red_contours = self.red_analyzer.detect_particles(red_frame)
-        green_contours = self.green_analyzer.detect_particles(green_frame)
-
         red_particles = self.red_analyzer.analyze_particles(red_contours, 'red')
+
+        # Process green particles
+        green_frame = self.green_detector.detect(frame, 'green')
+        green_contours = self.green_analyzer.detect_particles(green_frame)
         green_particles = self.green_analyzer.analyze_particles(green_contours, 'green')
 
         return frame, red_particles, green_particles
@@ -927,7 +997,7 @@ class ColorDetectionApp(QMainWindow):
         self.settings = settings or {}
         self.main_menu = main_menu
         self.setup_shortcuts()
-        self.unsaved_changes = True  # Set to True initially
+        self.unsaved_changes = True
         self.current_project_path = None
 
         self.settings = QSettings("VANTAGE", "ColorDetectionApp")
@@ -970,12 +1040,11 @@ class ColorDetectionApp(QMainWindow):
             save_as_action.setShortcut(QKeySequence.SaveAs)
         file_menu.addAction(save_as_action)
 
-        # Project menu
         project_menu = menubar.addMenu('Project')
 
-        select_port_action = QAction('Select Camera Port', self)
-        select_port_action.triggered.connect(self.select_camera_port)
-        project_menu.addAction(select_port_action)
+        project_settings_action = QAction('Project Settings', self)
+        project_settings_action.triggered.connect(self.show_project_settings)
+        project_menu.addAction(project_settings_action)
 
         close_project_action = QAction('Close Project', self)
         close_project_action.triggered.connect(self.closeEvent)
@@ -1006,6 +1075,8 @@ class ColorDetectionApp(QMainWindow):
             preferences_action.triggered.connect(self.show_preferences)
             file_menu.addAction(preferences_action)
 
+
+
     def select_camera_port(self):
         current_port = int(self.video_processor.cap.get(cv2.CAP_PROP_POS_FRAMES))
         port, ok = QInputDialog.getInt(self, "Camera Port", "Enter the USB camera port:",
@@ -1020,6 +1091,15 @@ class ColorDetectionApp(QMainWindow):
         preferences_dialog = PreferencesDialog(self)
         if preferences_dialog.exec_() == QDialog.Accepted:
             self.load_preferences()
+
+    def show_project_settings(self):
+        dialog = ProjectSettingsDialog(self, self.project_settings)
+        if dialog.exec_() == QDialog.Accepted:
+            new_settings = dialog.get_settings()
+            self.apply_project_settings(new_settings)
+            self.project_settings = new_settings
+            self.unsaved_changes = True
+            self.update_title()
 
     def show_about(self):
         about_text = f"VANTAGE \n\nVersion: {VERSION}\n\nVision Assisted Nano-particle Tracking and Guided Extraction\n\n Developed by Alfa Ozaltin and Nil Ertok @ Stanford University"
@@ -1064,11 +1144,22 @@ class ColorDetectionApp(QMainWindow):
         # Apply particle analysis settings
         self.apply_particle_analysis_settings()
 
-    def apply_camera_settings(self):
-        if hasattr(self, 'video_processor'):
-            self.video_processor.set_camera_port(self.default_camera_port)
-            width, height = map(int, self.camera_resolution.split('x'))
-            self.video_processor.set_resolution(width, height)
+    def setup_timer(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(33)
+
+    def apply_project_settings(self, settings):
+        # Apply the new settings to the project
+        self.video_processor.set_camera_port(settings.get('camera_port', 0))
+        width, height = map(int, settings.get('resolution', '1280x720').split('x'))
+        self.video_processor.set_resolution(width, height)
+        self.red_slider.setValue(settings.get('red_threshold', 20))
+        self.green_slider.setValue(settings.get('green_threshold', 20))
+        min_size = settings.get('min_particle_size', 30)
+        max_size = settings.get('max_particle_size', 600)
+        self.video_processor.red_analyzer.set_size_range(min_size, max_size)
+        self.video_processor.green_analyzer.set_size_range(min_size, max_size)
 
     def setup_auto_save(self):
         if hasattr(self, 'auto_save_timer'):
@@ -1165,15 +1256,15 @@ class ColorDetectionApp(QMainWindow):
 
     def update_frame(self):
         frame, red_particles, green_particles = self.video_processor.process_frame()
-        if frame is None:
-            return
+        if frame is not None:
+            self.original_view.update_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), red_particles + green_particles)
+            self.red_view.update_frame(
+                cv2.cvtColor(self.video_processor.red_detector.detect(frame, 'red'), cv2.COLOR_BGR2RGB), red_particles)
+            self.green_view.update_frame(
+                cv2.cvtColor(self.video_processor.green_detector.detect(frame, 'green'), cv2.COLOR_BGR2RGB),
+                green_particles)
 
-        self.original_view.update_frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), red_particles + green_particles)
-        self.red_view.update_frame(cv2.cvtColor(self.video_processor.red_detector.detect(frame, 'red'), cv2.COLOR_BGR2RGB), red_particles)
-        self.green_view.update_frame(cv2.cvtColor(self.video_processor.green_detector.detect(frame, 'green'), cv2.COLOR_BGR2RGB), green_particles)
 
-        self.update_particle_info(red_particles, green_particles)
-        self.check_beads_in_rois(red_particles + green_particles)
 
     def setup_color_control(self, color, detector, initial_value):
         group_box = QGroupBox(f"{color} Control")
@@ -1333,14 +1424,12 @@ class ColorDetectionApp(QMainWindow):
         if not filename.lower().endswith('.vtp'):
             filename += '.vtp'
 
-        settings = {
-            'camera_port': int(self.video_processor.cap.get(cv2.CAP_PROP_POS_FRAMES)),
-            'resolution': f"{self.video_processor.width}x{self.video_processor.height}",
-            'red_slider_value': self.red_slider.value(),
-            'green_slider_value': self.green_slider.value(),
+        settings = self.project_settings.copy()
+        settings.update({
             'green_boxes': [box.getRect() for box in self.original_view.green_boxes],
             'red_boxes': [box.getRect() for box in self.original_view.red_boxes]
-        }
+        })
+
         try:
             with open(filename, 'w') as f:
                 json.dump(settings, f)
@@ -1355,24 +1444,19 @@ class ColorDetectionApp(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to save project: {str(e)}")
 
     def load_settings(self, settings):
-        self.red_slider.setValue(settings.get('red_slider_value', 0))
-        self.green_slider.setValue(settings.get('green_slider_value', 0))
-
-        self.video_processor.red_detector.set_threshold(settings.get('red_slider_value', 0))
-        self.video_processor.green_detector.set_threshold(settings.get('green_slider_value', 0))
+        self.project_settings = settings
+        self.apply_project_settings(settings)
 
         self.original_view.green_boxes = [QRect(*box) for box in settings.get('green_boxes', [])]
         self.original_view.red_boxes = [QRect(*box) for box in settings.get('red_boxes', [])]
-
-        resolution = settings.get('resolution', '1280x720')
-        width, height = map(int, resolution.split('x'))
-        self.video_processor.set_resolution(width, height)
 
         self.original_view.update()
         self.unsaved_changes = False
         self.update_title()
 
     def closeEvent(self, event):
+        self.timer.stop()
+        self.video_processor.release()
         if self.unsaved_changes:
             reply = QMessageBox.question(self, 'Save Project',
                                          "Do you want to save the project before closing?",
