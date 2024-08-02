@@ -12,14 +12,14 @@ import markdown
 import cv2
 import numpy as np
 
-from PyQt5.QtCore import Qt, QTimer, QPointF, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, QSettings
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon, QKeySequence
+from PyQt5.QtCore import Qt, QTimer, QObject, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, QSettings
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon, QKeySequence, QFont
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
     QButtonGroup, QSplashScreen, QMessageBox, QDialog, QLineEdit,
     QPushButton, QTextBrowser, QFileDialog, QAction, QListWidget,
-    QInputDialog, QDialogButtonBox, QSpinBox, QSizePolicy, QSpacerItem, QShortcut
+    QInputDialog, QDialogButtonBox, QGraphicsOpacityEffect, QSizePolicy, QSpacerItem, QShortcut,
 )
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QWidget
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
@@ -94,18 +94,73 @@ class PreferencesDialog(QDialog):
         self.accept()
 
 
+class LoadingSplashScreen(QSplashScreen):
+    def __init__(self, logo_path):
+        pixmap = QPixmap(QSize(600, 350))  # Increased height to accommodate progress bar
+        painter = QPainter(pixmap)
+        gradient = QLinearGradient(0, 0, 0, pixmap.height())
+        gradient.setColorAt(0, QColor(230, 230, 250))
+        gradient.setColorAt(1, QColor(201, 160, 220))
+        painter.fillRect(pixmap.rect(), gradient)
+        logo = QPixmap(logo_path)
+        scaled_logo = logo.scaled(520, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo_rect = scaled_logo.rect()
+        logo_rect.moveCenter(QPoint(pixmap.width() // 2, pixmap.height() // 2 - 30))  # Moved up slightly
+        painter.drawPixmap(logo_rect, scaled_logo)
+        painter.end()
+        super().__init__(pixmap)
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.progress = 0
+
+    def drawContents(self, painter):
+        super().drawContents(painter)
+        rect = self.rect()
+        bottom_section_height = 60
+
+        # Draw a semi-transparent overlay for the bottom section
+        painter.fillRect(0, rect.height() - bottom_section_height, rect.width(), bottom_section_height,
+                         QColor(0, 0, 0, 40))
+
+        # Draw progress text
+        painter.setPen(Qt.white)
+        painter.setFont(QFont("Arial", 11, QFont.Bold))
+        text_rect = QRect(10, rect.height() - bottom_section_height, rect.width() - 20, 30)
+        painter.drawText(text_rect, Qt.AlignBottom | Qt.AlignHCenter, f"Loading... {self.progress}%")
+
+        # Draw progress bar
+        '''bar_height = 20
+        bar_margin = 10
+        bar_rect = QRect(bar_margin, rect.height() - bar_margin - bar_height,
+                         rect.width() - 2 * bar_margin, bar_height)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(200, 200, 200))
+        painter.drawRoundedRect(bar_rect, 5, 5)'''
+
+        # Draw progress
+        ''' progress_width = int(bar_rect.width() * (self.progress / 100))
+        progress_rect = QRect(bar_rect.x(), bar_rect.y(), progress_width, bar_rect.height())
+        progress_gradient = QLinearGradient(progress_rect.topLeft(), progress_rect.topRight())
+        progress_gradient.setColorAt(0, QColor(255, 255, 255))
+        progress_gradient.setColorAt(1, QColor(220, 220, 220))
+        painter.setBrush(progress_gradient)
+        painter.drawRoundedRect(progress_rect, 5, 5)'''
+
+    def setProgress(self, value, message=""):
+        self.progress = value
+        self.showMessage(message, Qt.AlignBottom | Qt.AlignHCenter, Qt.black)
+        self.repaint()
+
+
 class ProjectSettingsDialog(QDialog):
     def __init__(self, parent=None, current_settings=None):
         super().__init__(parent)
         self.setWindowTitle("Project Settings")
-        self.setMinimumSize(400, 300)
+        self.setMinimumSize(400, 200)
         self.current_settings = current_settings or {}
 
         layout = QVBoxLayout(self)
 
         self.setup_camera_settings()
-        self.setup_color_detection_settings()
-        self.setup_particle_analysis_settings()
 
         # Add OK and Cancel buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -113,9 +168,11 @@ class ProjectSettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+        self.setLayout(layout)
+
     def setup_camera_settings(self):
         group_box = QGroupBox("Camera Settings")
-        layout = QFormLayout()
+        form_layout = QFormLayout()
 
         self.camera_port = QSpinBox()
         self.camera_port.setRange(0, 10)
@@ -123,56 +180,16 @@ class ProjectSettingsDialog(QDialog):
 
         self.resolution = QLineEdit(self.current_settings.get('resolution', '1280x720'))
 
-        layout.addRow("Camera Port:", self.camera_port)
-        layout.addRow("Resolution:", self.resolution)
+        form_layout.addRow("Camera Port:", self.camera_port)
+        form_layout.addRow("Resolution:", self.resolution)
 
-        group_box.setLayout(layout)
-        self.layout().addWidget(group_box)
-
-    def setup_color_detection_settings(self):
-        group_box = QGroupBox("Color Detection Settings")
-        layout = QFormLayout()
-
-        self.red_threshold = QSlider(Qt.Horizontal)
-        self.red_threshold.setRange(0, 100)
-        self.red_threshold.setValue(self.current_settings.get('red_threshold', 20))
-
-        self.green_threshold = QSlider(Qt.Horizontal)
-        self.green_threshold.setRange(0, 100)
-        self.green_threshold.setValue(self.current_settings.get('green_threshold', 20))
-
-        layout.addRow("Red Threshold:", self.red_threshold)
-        layout.addRow("Green Threshold:", self.green_threshold)
-
-        group_box.setLayout(layout)
-        self.layout().addWidget(group_box)
-
-    def setup_particle_analysis_settings(self):
-        group_box = QGroupBox("Particle Analysis Settings")
-        layout = QFormLayout()
-
-        self.min_particle_size = QSpinBox()
-        self.min_particle_size.setRange(1, 249000)
-        self.min_particle_size.setValue(self.current_settings.get('min_particle_size', 300))
-
-        self.max_particle_size = QSpinBox()
-        self.max_particle_size.setRange(1, 250000)
-        self.max_particle_size.setValue(self.current_settings.get('max_particle_size', 10000))
-
-        layout.addRow("Min Particle Size:", self.min_particle_size)
-        layout.addRow("Max Particle Size:", self.max_particle_size)
-
-        group_box.setLayout(layout)
+        group_box.setLayout(form_layout)
         self.layout().addWidget(group_box)
 
     def get_settings(self):
         return {
             'camera_port': self.camera_port.value(),
             'resolution': self.resolution.text(),
-            'red_threshold': self.red_threshold.value(),
-            'green_threshold': self.green_threshold.value(),
-            'min_particle_size': self.min_particle_size.value(),
-            'max_particle_size': self.max_particle_size.value(),
         }
 
 
@@ -250,6 +267,7 @@ class TitleBar(QWidget):
         """
         hover_color = "#DC5F00" if button_type == "minimize" else "#CD1818"
         return base_style + f"QPushButton:hover {{ background-color: {hover_color}; }}"
+
 
 
 class RecentProjectsListWidget(QListWidget):
@@ -369,6 +387,52 @@ class MainMenu(QMainWindow):
 
         self.setup_ui()
         self.set_dark_theme()
+        self.create_menu()
+
+    def create_menu(self):
+        menubar = self.menuBar()
+
+        # Help menu
+        help_menu = menubar.addMenu('Help')
+
+        about_action = QAction('About', self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
+        user_manual_action = QAction('User Manual', self)
+        user_manual_action.triggered.connect(self.show_user_manual)
+        help_menu.addAction(user_manual_action)
+
+        # Preferences
+        if platform.system() == 'Darwin':  # macOS
+            preferences_action = QAction('Preferences...', self)
+            preferences_action.setShortcut(QKeySequence.Preferences)
+            preferences_action.triggered.connect(self.show_preferences)
+
+            app_menu = menubar.addMenu('VANTAGE')
+            app_menu.addAction(preferences_action)
+        else:  # Windows and Linux
+            preferences_action = QAction('Preferences...', self)
+            preferences_action.setShortcut(QKeySequence('Ctrl+,'))
+            preferences_action.triggered.connect(self.show_preferences)
+            help_menu.addAction(preferences_action)
+
+    def show_about(self):
+        about_text = f"VANTAGE \n\nVersion: {VERSION}\n\nVision Assisted Nano-particle Tracking and Guided Extraction\n\n Developed by Alfa Ozaltin and Nil Ertok @ Stanford University"
+        QMessageBox.about(self, "About VANTAGE", about_text)
+
+    def show_user_manual(self):
+        user_manual_dialog = UserManualDialog(self)
+        user_manual_dialog.exec_()
+
+    def show_preferences(self):
+        preferences_dialog = PreferencesDialog(self)
+        if preferences_dialog.exec_() == QDialog.Accepted:
+            self.load_preferences()
+
+    def load_preferences(self):
+        # Load preferences here (you may need to adjust this method based on your needs)
+        pass
 
     def setup_ui(self):
         central_widget = QWidget(self)
@@ -608,11 +672,14 @@ class MainMenu(QMainWindow):
             else:
                 with open(project_path, 'r') as f:
                     settings = json.load(f)
-                camera_port = settings.get('camera_port', 0)
-                resolution = settings.get('resolution', "960x360")
 
-            self.color_detection_app = ColorDetectionApp(camera_port, resolution, project_name, settings, self)
+            self.color_detection_app = ColorDetectionApp(settings.get('camera_port', 0),
+                                                         settings.get('resolution', "1280x720"),
+                                                         project_name,
+                                                         settings,
+                                                         self)
             self.color_detection_app.current_project_path = project_path
+            self.color_detection_app.load_settings(settings)  # Add this line
             self.color_detection_app.show()
             self.hide()
         except Exception as e:
@@ -997,11 +1064,11 @@ class ColorDetectionApp(QMainWindow):
         self.settings = settings or {}
         self.main_menu = main_menu
         self.setup_shortcuts()
-        self.unsaved_changes = True
+        self.unsaved_changes = False
         self.current_project_path = None
 
-        self.settings = QSettings("VANTAGE", "ColorDetectionApp")
-        self.load_preferences()
+        self.min_particle_size = 30
+        self.max_particle_size = 600
 
         width, height = map(int, resolution.split('x'))
         self.video_processor = VideoProcessor(camera_port, width, height)
@@ -1047,7 +1114,7 @@ class ColorDetectionApp(QMainWindow):
         project_menu.addAction(project_settings_action)
 
         close_project_action = QAction('Close Project', self)
-        close_project_action.triggered.connect(self.closeEvent)
+        close_project_action.triggered.connect(self.close_project)
         project_menu.addAction(close_project_action)
 
         # Help menu
@@ -1075,7 +1142,38 @@ class ColorDetectionApp(QMainWindow):
             preferences_action.triggered.connect(self.show_preferences)
             file_menu.addAction(preferences_action)
 
+    def remove_project_menus(self):
+        menubar = self.menuBar()
+        for action in menubar.actions():
+            if action.text() in ['&File', 'Project']:
+                menubar.removeAction(action)
 
+    def setup_particle_size_control(self):
+        group_box = QGroupBox("Particle Size Control")
+        layout = QVBoxLayout()
+
+        min_size_layout = QHBoxLayout()
+        min_size_label = QLabel("Min Size:")
+        self.min_size_spinbox = QSpinBox()
+        self.min_size_spinbox.setRange(1, 249000)
+        self.min_size_spinbox.setValue(self.min_particle_size)
+        self.min_size_spinbox.valueChanged.connect(self.update_particle_size)
+        min_size_layout.addWidget(min_size_label)
+        min_size_layout.addWidget(self.min_size_spinbox)
+
+        max_size_layout = QHBoxLayout()
+        max_size_label = QLabel("Max Size:")
+        self.max_size_spinbox = QSpinBox()
+        self.max_size_spinbox.setRange(1, 250000)
+        self.max_size_spinbox.setValue(self.max_particle_size)
+        self.max_size_spinbox.valueChanged.connect(self.update_particle_size)
+        max_size_layout.addWidget(max_size_label)
+        max_size_layout.addWidget(self.max_size_spinbox)
+
+        layout.addLayout(min_size_layout)
+        layout.addLayout(max_size_layout)
+        group_box.setLayout(layout)
+        self.control_layout.addWidget(group_box)
 
     def select_camera_port(self):
         current_port = int(self.video_processor.cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -1087,17 +1185,28 @@ class ColorDetectionApp(QMainWindow):
             self.unsaved_changes = True
             self.update_title()
 
+    def close_project(self):
+        self.close()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'icon_label'):
+            self.icon_label.setGeometry(self.width() - 40, 10, 32, 32)
+
     def show_preferences(self):
         preferences_dialog = PreferencesDialog(self)
         if preferences_dialog.exec_() == QDialog.Accepted:
             self.load_preferences()
 
     def show_project_settings(self):
-        dialog = ProjectSettingsDialog(self, self.project_settings)
+        current_settings = {
+            'camera_port': self.video_processor.camera_port,
+            'resolution': f"{self.video_processor.width}x{self.video_processor.height}"
+        }
+        dialog = ProjectSettingsDialog(self, current_settings)
         if dialog.exec_() == QDialog.Accepted:
             new_settings = dialog.get_settings()
             self.apply_project_settings(new_settings)
-            self.project_settings = new_settings
             self.unsaved_changes = True
             self.update_title()
 
@@ -1108,6 +1217,56 @@ class ColorDetectionApp(QMainWindow):
     def show_user_manual(self):
         user_manual_dialog = UserManualDialog(self)
         user_manual_dialog.exec_()
+
+    def show_save_icon(self):
+        self.show_icon("assets/save_icon.svg", "Project Saved")
+
+    def show_autosave_icon(self):
+        self.show_icon("assets/autosave_icon.svg", "Project Auto-saved")
+
+    from PyQt5.QtWidgets import QGraphicsOpacityEffect
+    from PyQt5.QtCore import QTimer, QPropertyAnimation, QEasingCurve
+
+    def show_icon(self, icon_path, tooltip):
+        if not hasattr(self, 'icon_label'):
+            self.icon_label = QLabel(self)
+            self.icon_label.setStyleSheet("background-color: transparent;")
+            self.icon_label.setGeometry(self.width() - 40, 10, 32, 32)
+
+            self.opacity_effect = QGraphicsOpacityEffect(self.icon_label)
+            self.icon_label.setGraphicsEffect(self.opacity_effect)
+
+        pixmap = QPixmap(icon_path)
+        if pixmap.isNull():
+            print(f"Failed to load icon: {icon_path}")
+            return
+
+        scaled_pixmap = pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.icon_label.setPixmap(scaled_pixmap)
+        self.icon_label.setToolTip(tooltip)
+
+        self.opacity_effect.setOpacity(1.0)
+        self.icon_label.raise_()
+        self.icon_label.show()
+
+        # Set up fade-out animation
+        self.fade_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.fade_animation.setDuration(2000)  # 2 seconds fade-out
+        self.fade_animation.setStartValue(1.0)
+        self.fade_animation.setEndValue(0.0)
+        self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
+        self.fade_animation.finished.connect(self.icon_label.hide)
+
+        # Start fade-out after 3 seconds
+        QTimer.singleShot(3000, self.start_fade_out)
+
+        # Ensure the icon disappears even if the animation is interrupted
+        QTimer.singleShot(5000, self.icon_label.hide)
+
+    def start_fade_out(self):
+        if hasattr(self, 'fade_animation'):
+            self.fade_animation.start()
+
 
     def apply_particle_analysis_settings(self):
         if hasattr(self, 'video_processor'):
@@ -1154,19 +1313,34 @@ class ColorDetectionApp(QMainWindow):
         self.video_processor.set_camera_port(settings.get('camera_port', 0))
         width, height = map(int, settings.get('resolution', '1280x720').split('x'))
         self.video_processor.set_resolution(width, height)
-        self.red_slider.setValue(settings.get('red_threshold', 20))
-        self.green_slider.setValue(settings.get('green_threshold', 20))
-        min_size = settings.get('min_particle_size', 30)
-        max_size = settings.get('max_particle_size', 600)
-        self.video_processor.red_analyzer.set_size_range(min_size, max_size)
-        self.video_processor.green_analyzer.set_size_range(min_size, max_size)
+
+        # Only update these values if they are present in the settings
+        if 'red_threshold' in settings:
+            red_threshold = settings['red_threshold']
+            self.red_slider.setValue(red_threshold)
+            self.red_value_label.setText(f"Value: {red_threshold}")
+            self.video_processor.red_detector.set_threshold(red_threshold)
+
+        if 'green_threshold' in settings:
+            green_threshold = settings['green_threshold']
+            self.green_slider.setValue(green_threshold)
+            self.green_value_label.setText(f"Value: {green_threshold}")
+            self.video_processor.green_detector.set_threshold(green_threshold)
+
+        if 'min_particle_size' in settings and 'max_particle_size' in settings:
+            min_size = settings['min_particle_size']
+            max_size = settings['max_particle_size']
+            self.min_size_spinbox.setValue(min_size)
+            self.max_size_spinbox.setValue(max_size)
+            self.video_processor.red_analyzer.set_size_range(min_size, max_size)
+            self.video_processor.green_analyzer.set_size_range(min_size, max_size)
 
     def setup_auto_save(self):
         if hasattr(self, 'auto_save_timer'):
             self.auto_save_timer.stop()
         self.auto_save_timer = QTimer(self)
         self.auto_save_timer.timeout.connect(self.auto_save)
-        self.auto_save_timer.start(self.auto_save_interval * 60000)  # Convert minutes to milliseconds
+        self.auto_save_timer.start(self.auto_save_interval * 1000)  # Convert minutes to milliseconds
 
     def apply_color_detection_settings(self):
         if hasattr(self, 'video_processor'):
@@ -1184,10 +1358,18 @@ class ColorDetectionApp(QMainWindow):
             self.video_processor.red_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
             self.video_processor.green_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
 
+    def update_particle_size(self):
+        self.min_particle_size = self.min_size_spinbox.value()
+        self.max_particle_size = self.max_size_spinbox.value()
+        self.video_processor.red_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+        self.video_processor.green_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+        self.unsaved_changes = True
+        self.update_title()
+
     def auto_save(self):
         if self.current_project_path and self.unsaved_changes:
             self.save_project()
-            QMessageBox.information(self, "Auto Save", "Project auto-saved successfully.")
+            self.show_autosave_icon()
 
     def setup_ui(self):
         self.setWindowTitle(f"VANTAGE - {self.project_name}")
@@ -1245,6 +1427,7 @@ class ColorDetectionApp(QMainWindow):
         self.setup_color_control("Red", self.video_processor.red_detector, 4)
         self.setup_color_control("Green", self.video_processor.green_detector, 25)
 
+        self.setup_particle_size_control()  # Add this line
         self.setup_particle_info()
         self.setup_roi_controls()
         self.setup_dark_mode_switch()
@@ -1263,8 +1446,6 @@ class ColorDetectionApp(QMainWindow):
             self.green_view.update_frame(
                 cv2.cvtColor(self.video_processor.green_detector.detect(frame, 'green'), cv2.COLOR_BGR2RGB),
                 green_particles)
-
-
 
     def setup_color_control(self, color, detector, initial_value):
         group_box = QGroupBox(f"{color} Control")
@@ -1286,8 +1467,10 @@ class ColorDetectionApp(QMainWindow):
 
         if color.lower() == 'red':
             self.red_slider = slider
+            self.red_value_label = value_label
         else:
             self.green_slider = slider
+            self.green_value_label = value_label
 
         layout.addWidget(slider)
         layout.addWidget(value_label)
@@ -1409,14 +1592,18 @@ class ColorDetectionApp(QMainWindow):
     def save_project(self):
         if not self.current_project_path:
             self.save_project_as()
+            self.show_save_icon()
         else:
             self._save_project(self.current_project_path)
+            self.show_save_icon()
+
 
     def save_project_as(self):
         suggested_name = f"{self.project_name}.vtp" if not self.project_name.endswith('.vtp') else self.project_name
         filename, _ = QFileDialog.getSaveFileName(self, "Save Project", suggested_name, "VANTAGE Project (*.vtp)")
         if filename:
             self._save_project(os.path.abspath(filename))
+            QMessageBox.information(self, "Project Saved", f"Project saved successfully to: {filename}")
         else:
             pass
 
@@ -1424,11 +1611,16 @@ class ColorDetectionApp(QMainWindow):
         if not filename.lower().endswith('.vtp'):
             filename += '.vtp'
 
-        settings = self.project_settings.copy()
-        settings.update({
+        settings = {
+            'camera_port': self.video_processor.camera_port,
+            'resolution': f"{self.video_processor.width}x{self.video_processor.height}",
+            'red_threshold': self.red_slider.value(),
+            'green_threshold': self.green_slider.value(),
+            'min_particle_size': self.min_size_spinbox.value(),
+            'max_particle_size': self.max_size_spinbox.value(),
             'green_boxes': [box.getRect() for box in self.original_view.green_boxes],
             'red_boxes': [box.getRect() for box in self.original_view.red_boxes]
-        })
+        }
 
         try:
             with open(filename, 'w') as f:
@@ -1439,14 +1631,32 @@ class ColorDetectionApp(QMainWindow):
             self.update_title()
             if self.main_menu:
                 self.main_menu.recent_projects_manager.add(self.current_project_path)
-            QMessageBox.information(self, "Project Saved", f"Project saved successfully to {self.project_name}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save project: {str(e)}")
 
     def load_settings(self, settings):
-        self.project_settings = settings
-        self.apply_project_settings(settings)
+        # Update camera settings
+        self.video_processor.set_camera_port(settings.get('camera_port', 0))
+        width, height = map(int, settings.get('resolution', '1280x720').split('x'))
+        self.video_processor.set_resolution(width, height)
 
+        # Update color thresholds
+        red_threshold = settings.get('red_threshold', 20)
+        green_threshold = settings.get('green_threshold', 20)
+        self.red_slider.setValue(red_threshold)
+        self.green_slider.setValue(green_threshold)
+        self.video_processor.red_detector.set_threshold(red_threshold)
+        self.video_processor.green_detector.set_threshold(green_threshold)
+
+        # Update particle size settings
+        self.min_particle_size = settings.get('min_particle_size', 30)
+        self.max_particle_size = settings.get('max_particle_size', 600)
+        self.min_size_spinbox.setValue(self.min_particle_size)
+        self.max_size_spinbox.setValue(self.max_particle_size)
+        self.video_processor.red_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+        self.video_processor.green_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+
+        # Load ROIs
         self.original_view.green_boxes = [QRect(*box) for box in settings.get('green_boxes', [])]
         self.original_view.red_boxes = [QRect(*box) for box in settings.get('red_boxes', [])]
 
@@ -1464,6 +1674,7 @@ class ColorDetectionApp(QMainWindow):
 
             if reply == QMessageBox.Yes:
                 self.save_project()
+                QMessageBox.information(self, "Project Saved", "Project saved successfully.")
                 if self.unsaved_changes:  # If user cancelled the save dialog
                     event.ignore()
                     return
@@ -1477,13 +1688,14 @@ class ColorDetectionApp(QMainWindow):
 
         self.video_processor.release()
         if self.main_menu:
+            self.remove_project_menus()
             self.main_menu.show()
         event.accept()
 
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
-        pixmap = QPixmap(QSize(600, 300))  # Reduced size of the splash screen
+        pixmap = QPixmap(QSize(600, 450))  # Reduced size of the splash screen
 
         painter = QPainter(pixmap)
 
@@ -1513,37 +1725,83 @@ class FadingSplashScreen(QSplashScreen):
         self.fade_anim.start()
 
 
+
+class AppLoader(QObject):
+    progress_updated = pyqtSignal(int, str)
+    loading_finished = pyqtSignal(MainMenu)
+
+    def __init__(self):
+        super().__init__()
+        self.main_menu = None
+
+    def load(self):
+        time.sleep(0.4)
+        self.progress_updated.emit(0, "Initializing application...")
+        self.main_menu = MainMenu()
+        time.sleep(0.2)
+
+
+        self.progress_updated.emit(40, "Setting up user interface...")
+        self.main_menu.setup_ui()
+        time.sleep(0.5)
+
+        self.progress_updated.emit(60, "Creating menu...")
+        self.main_menu.create_menu()
+        time.sleep(0.5)
+
+        self.progress_updated.emit(80, "Loading preferences...")
+        self.main_menu.load_preferences()
+        time.sleep(0.8)
+
+        self.progress_updated.emit(90, "Loading recent projects...")
+        self.main_menu.load_recent_projects()
+        time.sleep(0.2)
+
+        self.progress_updated.emit(100, "Finalizing...")
+        time.sleep(1)
+        self.loading_finished.emit(self.main_menu)
+
+
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
-
     app.setStyle("Fusion")
 
     app_icon = QIcon()
-    if platform.system() == 'Windows':
-        myappid = f'vxsoftware.vantage.beta.214b'  # arbitrary string
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-        icon_path = 'vantage.ico'
-    else:
-        icon_path = 'assets/v3/vtg_icon_comet.png'
+    icon_sizes = [16, 24, 32, 48, 64, 128, 256]
 
-    app_icon.addFile(icon_path, QSize(16, 16))
-    app_icon.addFile(icon_path, QSize(24, 24))
-    app_icon.addFile(icon_path, QSize(32, 32))
-    app_icon.addFile(icon_path, QSize(48, 48))
-    app_icon.addFile(icon_path, QSize(256, 256))
+    if platform.system() == 'Windows':
+        # Windows-specific setup
+        myappid = 'vxsoftware.vantage.beta.214b'  # Arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        icon_path = 'assets/vantage.ico'
+        app_icon.addFile(icon_path)
+    elif platform.system() == 'Darwin':  # macOS
+        icon_path = 'assets/v3/vtg_icon_comet.icns'
+        app_icon.addFile(icon_path)
+    else:  # Linux and other platforms
+        icon_path = 'assets/v3/vtg_icon_comet.png'
+        for size in icon_sizes:
+            app_icon.addFile(icon_path, QSize(size, size))
+
     app.setWindowIcon(app_icon)
 
-    splash = FadingSplashScreen("assets/v3/vtg_logo_full_splash")
+    splash = LoadingSplashScreen("assets/v3/vtg_logo_full_splash")
     splash.show()
 
-    main_menu = MainMenu()
-    main_menu.setWindowIcon(app_icon)
+    loader = AppLoader()
+    loader.progress_updated.connect(splash.setProgress)
 
-    def showMainMenu():
-        splash.fadeOut()
+    def on_loading_finished(main_menu):
+        main_menu.setWindowIcon(app_icon)
         main_menu.show()
+        splash.finish(main_menu)
 
-    QTimer.singleShot(2500, showMainMenu)
+    loader.loading_finished.connect(on_loading_finished)
+
+    # Start loading process
+    QTimer.singleShot(100, loader.load)
 
     sys.exit(app.exec_())
