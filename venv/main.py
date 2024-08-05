@@ -1,32 +1,28 @@
+import ctypes
 import json
 import os
 import platform
+import random as r
 import sys
-import ctypes
-from dataclasses import dataclass
-import threading
-from queue import Queue
 import time
+from dataclasses import dataclass
 
-import markdown
 import cv2
+import markdown
 import numpy as np
-
-from PyQt5.QtCore import Qt, QTimer, QObject, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, QSettings
+from PyQt5.QtCore import Qt, QTimer, QObject, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, \
+    QSettings
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon, QKeySequence, QFont
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
-    QButtonGroup, QSplashScreen, QMessageBox, QDialog, QLineEdit,
-    QPushButton, QTextBrowser, QFileDialog, QAction, QListWidget,
-    QInputDialog, QDialogButtonBox, QGraphicsOpacityEffect, QSizePolicy, QSpacerItem, QShortcut,
+    QApplication, QMainWindow, QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
+    QButtonGroup, QSplashScreen, QMessageBox, QTextBrowser, QAction, QInputDialog, QGraphicsOpacityEffect, QSizePolicy,
+    QSpacerItem, QShortcut,
 )
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QPushButton, QHBoxLayout, QWidget
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout,
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QWidget, QFormLayout,
                              QLineEdit, QSpinBox, QPushButton, QDialogButtonBox, QFileDialog)
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout
 
-
-if platform.system() == 'Darwin':  # macOS
+if platform.system() == 'Darwin':
     from Foundation import NSBundle
     bundle = NSBundle.mainBundle()
     info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
@@ -126,24 +122,6 @@ class LoadingSplashScreen(QSplashScreen):
         painter.setFont(QFont("Arial", 11, QFont.Bold))
         text_rect = QRect(10, rect.height() - bottom_section_height, rect.width() - 20, 30)
         painter.drawText(text_rect, Qt.AlignBottom | Qt.AlignHCenter, f"Loading... {self.progress}%")
-
-        # Draw progress bar
-        '''bar_height = 20
-        bar_margin = 10
-        bar_rect = QRect(bar_margin, rect.height() - bar_margin - bar_height,
-                         rect.width() - 2 * bar_margin, bar_height)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(200, 200, 200))
-        painter.drawRoundedRect(bar_rect, 5, 5)'''
-
-        # Draw progress
-        ''' progress_width = int(bar_rect.width() * (self.progress / 100))
-        progress_rect = QRect(bar_rect.x(), bar_rect.y(), progress_width, bar_rect.height())
-        progress_gradient = QLinearGradient(progress_rect.topLeft(), progress_rect.topRight())
-        progress_gradient.setColorAt(0, QColor(255, 255, 255))
-        progress_gradient.setColorAt(1, QColor(220, 220, 220))
-        painter.setBrush(progress_gradient)
-        painter.drawRoundedRect(progress_rect, 5, 5)'''
 
     def setProgress(self, value, message=""):
         self.progress = value
@@ -1224,9 +1202,6 @@ class ColorDetectionApp(QMainWindow):
     def show_autosave_icon(self):
         self.show_icon("assets/autosave_icon.svg", "Project Auto-saved")
 
-    from PyQt5.QtWidgets import QGraphicsOpacityEffect
-    from PyQt5.QtCore import QTimer, QPropertyAnimation, QEasingCurve
-
     def show_icon(self, icon_path, tooltip):
         if not hasattr(self, 'icon_label'):
             self.icon_label = QLabel(self)
@@ -1249,18 +1224,13 @@ class ColorDetectionApp(QMainWindow):
         self.icon_label.raise_()
         self.icon_label.show()
 
-        # Set up fade-out animation
         self.fade_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_animation.setDuration(2000)  # 2 seconds fade-out
+        self.fade_animation.setDuration(2000)
         self.fade_animation.setStartValue(1.0)
         self.fade_animation.setEndValue(0.0)
         self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
         self.fade_animation.finished.connect(self.icon_label.hide)
-
-        # Start fade-out after 3 seconds
         QTimer.singleShot(3000, self.start_fade_out)
-
-        # Ensure the icon disappears even if the animation is interrupted
         QTimer.singleShot(5000, self.icon_label.hide)
 
     def start_fade_out(self):
@@ -1282,25 +1252,16 @@ class ColorDetectionApp(QMainWindow):
         self.default_camera_port = int(self.settings.value("default_camera_port", 0))
         self.default_resolution = self.settings.value("default_resolution", "1280x720")
 
-        # Set up auto-save timer
         self.setup_auto_save()
 
-        # Load color detection preferences
         self.red_threshold = int(self.settings.value("red_threshold", 20))
         self.green_threshold = int(self.settings.value("green_threshold", 20))
 
-        # Apply color detection settings
         self.apply_color_detection_settings()
-
-        self.min_particle_size = int(self.settings.value("min_particle_size", 30))
-        self.max_particle_size = int(self.settings.value("max_particle_size", 600))
-        self.apply_particle_analysis_settings()
 
         # Load particle analysis preferences
         self.min_particle_size = int(self.settings.value("min_particle_size", 30))
         self.max_particle_size = int(self.settings.value("max_particle_size", 600))
-
-        # Apply particle analysis settings
         self.apply_particle_analysis_settings()
 
     def setup_timer(self):
@@ -1340,7 +1301,7 @@ class ColorDetectionApp(QMainWindow):
             self.auto_save_timer.stop()
         self.auto_save_timer = QTimer(self)
         self.auto_save_timer.timeout.connect(self.auto_save)
-        self.auto_save_timer.start(self.auto_save_interval * 1000)  # Convert minutes to milliseconds
+        self.auto_save_timer.start(self.auto_save_interval * 1000)
 
     def apply_color_detection_settings(self):
         if hasattr(self, 'video_processor'):
@@ -1388,7 +1349,6 @@ class ColorDetectionApp(QMainWindow):
         splitter.setSizes([800, 400])
 
     def setup_shortcuts(self):
-        # Determine the operating system
         os_name = platform.system()
 
         if os_name == 'Darwin':
@@ -1427,7 +1387,7 @@ class ColorDetectionApp(QMainWindow):
         self.setup_color_control("Red", self.video_processor.red_detector, 4)
         self.setup_color_control("Green", self.video_processor.green_detector, 25)
 
-        self.setup_particle_size_control()  # Add this line
+        self.setup_particle_size_control()
         self.setup_particle_info()
         self.setup_roi_controls()
         self.setup_dark_mode_switch()
@@ -1695,7 +1655,7 @@ class ColorDetectionApp(QMainWindow):
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
-        pixmap = QPixmap(QSize(600, 450))  # Reduced size of the splash screen
+        pixmap = QPixmap(QSize(600, 450))
 
         painter = QPainter(pixmap)
 
@@ -1738,27 +1698,35 @@ class AppLoader(QObject):
         time.sleep(0.4)
         self.progress_updated.emit(0, "Initializing application...")
         self.main_menu = MainMenu()
-        time.sleep(0.2)
+        time.sleep(0.1)
+        self.progress_updated.emit(r.randint(10, 30), "Initializing application...")
+        time.sleep(0.1)
 
 
         self.progress_updated.emit(40, "Setting up user interface...")
         self.main_menu.setup_ui()
-        time.sleep(0.5)
+        time.sleep(0.2)
+        self.progress_updated.emit(r.randint(42, 58), "Setting up user interface...")
+        time.sleep(0.3)
 
         self.progress_updated.emit(60, "Creating menu...")
         self.main_menu.create_menu()
-        time.sleep(0.5)
+        time.sleep(0.1)
+        self.progress_updated.emit(r.randint(63,79), "Creating menu...")
+        time.sleep(r.randint(50,200)/100)
+
 
         self.progress_updated.emit(80, "Loading preferences...")
         self.main_menu.load_preferences()
-        time.sleep(0.8)
+        time.sleep(r.randint(0,20)/100)
 
         self.progress_updated.emit(90, "Loading recent projects...")
         self.main_menu.load_recent_projects()
         time.sleep(0.2)
+        self.progress_updated.emit(r.randint(91,99), "Loading recent projects...")
 
         self.progress_updated.emit(100, "Finalizing...")
-        time.sleep(1)
+        time.sleep(r.randint(50, 200) / 100)
         self.loading_finished.emit(self.main_menu)
 
 
@@ -1774,14 +1742,14 @@ if __name__ == "__main__":
 
     if platform.system() == 'Windows':
         # Windows-specific setup
-        myappid = 'vxsoftware.vantage.beta.214b'  # Arbitrary string
+        myappid = 'vxsoftware.vantage.beta.214b'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
         icon_path = 'assets/vantage.ico'
         app_icon.addFile(icon_path)
     elif platform.system() == 'Darwin':  # macOS
         icon_path = 'assets/v3/vtg_icon_comet.icns'
         app_icon.addFile(icon_path)
-    else:  # Linux and other platforms
+    else:
         icon_path = 'assets/v3/vtg_icon_comet.png'
         for size in icon_sizes:
             app_icon.addFile(icon_path, QSize(size, size))
@@ -1801,7 +1769,6 @@ if __name__ == "__main__":
 
     loader.loading_finished.connect(on_loading_finished)
 
-    # Start loading process
     QTimer.singleShot(100, loader.load)
 
     sys.exit(app.exec_())
