@@ -412,6 +412,7 @@ class MainMenu(QMainWindow):
         # Load preferences here (you may need to adjust this method based on your needs)
         pass
 
+
     def setup_ui(self):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
