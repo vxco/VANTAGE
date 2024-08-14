@@ -6,6 +6,7 @@ import random as r
 import sys
 import time
 from dataclasses import dataclass
+from s826.py import *
 
 import cv2
 import markdown
@@ -1736,6 +1737,7 @@ class AppLoader(QObject):
 
 
 if __name__ == "__main__":
+    print(s826_open())
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
     app.setStyle("Fusion")
