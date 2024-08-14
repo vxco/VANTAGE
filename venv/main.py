@@ -1699,8 +1699,9 @@ class AppLoader(QObject):
         self.progress_updated.emit(0, "Initializing application...")
         self.main_menu = MainMenu()
         time.sleep(0.1)
-        self.progress_updated.emit(r.randint(10, 30), "Initializing application...")
+        self.progress_updated.emit(r.randint(10, 32), "Initializing application...")
         time.sleep(0.1)
+
 
 
         self.progress_updated.emit(40, "Setting up user interface...")
@@ -1728,6 +1729,7 @@ class AppLoader(QObject):
         self.progress_updated.emit(100, "Finalizing...")
         time.sleep(r.randint(50, 200) / 100)
         self.loading_finished.emit(self.main_menu)
+
 
 
 
