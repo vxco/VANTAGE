@@ -764,6 +764,7 @@ class TitleBar(QWidget):
         if event.button() == Qt.LeftButton:
             self.parent.moving = False
 
+
 class ProjectSettingsDialog(ModernDialog):
     def __init__(self, parent=None, current_settings=None):
         super().__init__(parent, "Project Settings")
