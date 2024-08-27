@@ -43,6 +43,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QWidget, QFormLayout,
                              QLineEdit, QSpinBox, QPushButton, QDialogButtonBox, QFileDialog)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout
+from PyQt5.QtWidgets import QMenu
+
 
 logging.basicConfig(filename='s826Debug.log', level=logging.DEBUG,
                     format='s826DEBUG | %(asctime)s - %(levelname)s - %(message)s')
@@ -621,7 +623,7 @@ class FlashingTimedDialog(QDialog):
 
 class LoadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
-        pixmap = QPixmap(QSize(600, 350))  # Increased height to accommodate progress bar
+        pixmap = QPixmap(QSize(600, 350))
         painter = QPainter(pixmap)
         gradient = QLinearGradient(0, 0, 0, pixmap.height())
         gradient.setColorAt(0, QColor(230, 230, 250))
@@ -630,7 +632,7 @@ class LoadingSplashScreen(QSplashScreen):
         logo = QPixmap(logo_path)
         scaled_logo = logo.scaled(520, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         logo_rect = scaled_logo.rect()
-        logo_rect.moveCenter(QPoint(pixmap.width() // 2, pixmap.height() // 2 - 30))  # Moved up slightly
+        logo_rect.moveCenter(QPoint(pixmap.width() // 2, pixmap.height() // 2 - 30))
         painter.drawPixmap(logo_rect, scaled_logo)
         painter.end()
         super().__init__(pixmap)
@@ -652,11 +654,115 @@ class LoadingSplashScreen(QSplashScreen):
         text_rect = QRect(10, rect.height() - bottom_section_height, rect.width() - 20, 30)
         painter.drawText(text_rect, Qt.AlignBottom | Qt.AlignHCenter, f"Loading... {self.progress}%")
 
+        # Draw version text
+        monospace_font = QFont("Courier", 9)  # Using Courier as a monospace font
+        painter.setFont(monospace_font)
+        painter.setPen(QColor(100, 100, 100, 180))  # Faded gray color
+        version_text = f"v{VERSION}"
+        version_rect = QRect(10, rect.height() - bottom_section_height - 20, 100, 20)
+        painter.drawText(version_rect, Qt.AlignLeft | Qt.AlignBottom, version_text)
+
     def setProgress(self, value, message=""):
         self.progress = value
         self.showMessage(message, Qt.AlignBottom | Qt.AlignHCenter, Qt.black)
         self.repaint()
 
+
+class TitleBar(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.setFixedHeight(30)
+        self.setStyleSheet("background-color: #202020;")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Add help button
+        self.help_button = self.create_help_button()
+        layout.addWidget(self.help_button)
+
+        layout.addStretch()
+
+        for button_data in [("minimize", self.parent.showMinimized), ("close", self.parent.close)]:
+            button = QPushButton(self)
+            button.setIcon(QIcon(f"assets/{button_data[0]}_icon.png"))
+            button.setFixedSize(30, 30)
+            button.clicked.connect(button_data[1])
+            button.setStyleSheet(self.get_button_style(button_data[0]))
+            layout.addWidget(button)
+
+    def create_help_button(self):
+        help_button = QPushButton("Help", self)
+        help_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 5px;
+            }
+        """)
+        help_button.setCursor(Qt.PointingHandCursor)
+
+        help_menu = QMenu(self)
+        help_menu.setStyleSheet("""
+            QMenu {
+                background-color: #2d2d2d;
+                color: white;
+                border: 1px solid #3a3a3a;
+            }
+            QMenu::item {
+                padding: 5px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #3a3a3a;
+            }
+        """)
+
+        about_action = help_menu.addAction('About')
+        user_manual_action = help_menu.addAction('User Manual')
+        preferences_action = help_menu.addAction('Preferences')
+
+        help_button.setMenu(help_menu)
+
+        about_action.triggered.connect(self.parent.show_about)
+        user_manual_action.triggered.connect(self.parent.show_user_manual)
+        preferences_action.triggered.connect(self.parent.show_preferences)
+
+        return help_button
+
+    @staticmethod
+    def get_button_style(button_type):
+        base_style = """
+            QPushButton {
+                border: none;
+                padding: 0px;
+            }
+        """
+        hover_color = "#DC5F00" if button_type == "minimize" else "#CD1818"
+        return base_style + f"QPushButton:hover {{ background-color: {hover_color}; }}"
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent.moving = True
+            self.parent.offset = event.globalPos() - self.parent.pos()
+
+    def mouseMoveEvent(self, event):
+        if self.parent.moving:
+            self.parent.move(event.globalPos() - self.parent.offset)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent.moving = False
 
 class ProjectSettingsDialog(ModernDialog):
     def __init__(self, parent=None, current_settings=None):
@@ -856,47 +962,6 @@ class RecentProjectsManager:
             self.save()
 
 
-class TitleBar(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.setup_ui()
-
-    def setup_ui(self):
-        self.setFixedHeight(30)
-        self.setStyleSheet("background-color: #202020;")
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 0, 0)
-        layout.setSpacing(0)
-
-        title_label = QLabel(" ")
-        title_label.setStyleSheet("color: white; font-weight: bold; padding-left: 10px;")
-        layout.addWidget(title_label)
-
-        layout.addStretch()
-
-        for button_data in [("minimize", self.parent.showMinimized), ("close", self.parent.close)]:
-            button = QPushButton(self)
-            button.setIcon(QIcon(f"assets/{button_data[0]}_icon.png"))
-            button.setFixedSize(30, 30)
-            button.clicked.connect(button_data[1])
-            button.setStyleSheet(self.get_button_style(button_data[0]))
-            layout.addWidget(button)
-
-    @staticmethod
-    def get_button_style(button_type):
-        base_style = """
-            QPushButton {
-                border: none;
-                padding: 0px;
-            }
-        """
-        hover_color = "#DC5F00" if button_type == "minimize" else "#CD1818"
-        return base_style + f"QPushButton:hover {{ background-color: {hover_color}; }}"
-
-
-
 class RecentProjectsListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1002,11 +1067,13 @@ class RecentProjectsListWidget(QListWidget):
                     open_button.click()
 
 
+
+
 class MainMenu(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setFixedSize(650, 450)
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
         self.recent_projects_manager = RecentProjectsManager()
         self.moving = False
@@ -1014,35 +1081,43 @@ class MainMenu(QMainWindow):
 
         self.setup_ui()
         self.set_dark_theme()
-        self.create_menu()
 
-    def create_menu(self):
-        menubar = self.menuBar()
+    def setup_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Help menu
-        help_menu = menubar.addMenu('Help')
+        # Add custom titlebar
+        self.titlebar = TitleBar(self)
+        main_layout.addWidget(self.titlebar)
 
-        about_action = QAction('About', self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
+        # Content area
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.addWidget(content_widget)
 
-        user_manual_action = QAction('User Manual', self)
-        user_manual_action.triggered.connect(self.show_user_manual)
-        help_menu.addAction(user_manual_action)
+        # Rest of your UI setup...
+        self.setup_logo(content_layout)
+        content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.setup_buttons(content_layout)
+        content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.setup_recent_projects(content_layout)
 
-        # Preferences
-        if platform.system() == 'Darwin':  # macOS
-            preferences_action = QAction('Preferences...', self)
-            preferences_action.setShortcut(QKeySequence.Preferences)
-            preferences_action.triggered.connect(self.show_preferences)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and not self.titlebar.geometry().contains(event.pos()):
+            self.moving = True
+            self.offset = event.globalPos() - self.pos()
 
-            app_menu = menubar.addMenu('VANTAGE')
-            app_menu.addAction(preferences_action)
-        else:  # Windows and Linux
-            preferences_action = QAction('Preferences...', self)
-            preferences_action.setShortcut(QKeySequence('Ctrl+,'))
-            preferences_action.triggered.connect(self.show_preferences)
-            help_menu.addAction(preferences_action)
+    def mouseMoveEvent(self, event):
+        if self.moving:
+            self.move(event.globalPos() - self.offset)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = False
 
     def show_about(self):
         about_dialog = AboutDialog(self)
@@ -1058,29 +1133,10 @@ class MainMenu(QMainWindow):
         if preferences_dialog.exec_() == QDialog.Accepted:
             self.load_preferences()
 
+
     def load_preferences(self):
         # Load preferences here (you may need to adjust this method based on your needs)
         pass
-
-
-    def setup_ui(self):
-        central_widget = QWidget(self)
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-
-        main_layout.addWidget(TitleBar(self))
-
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
-        main_layout.addWidget(content_widget)
-
-        self.setup_logo(content_layout)
-        content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        self.setup_buttons(content_layout)
-        content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        self.setup_recent_projects(content_layout)
 
     def setup_logo(self, layout):
         logo_label = QLabel()
@@ -1313,19 +1369,6 @@ class MainMenu(QMainWindow):
             self.hide()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open the project: {str(e)}")
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.moving = True
-            self.offset = event.pos()
-
-    def mouseMoveEvent(self, event):
-        if self.moving:
-            self.move(event.globalPos() - self.offset)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.moving = False
 
 
 class DarkThemeDialog(QDialog):
@@ -1746,9 +1789,6 @@ class ColorDetectionApp(QMainWindow):
         project_settings_action.triggered.connect(self.show_project_settings)
         project_menu.addAction(project_settings_action)
 
-        close_project_action = QAction('Close Project', self)
-        close_project_action.triggered.connect(self.close_project)
-        project_menu.addAction(close_project_action)
 
         # Help menu
         help_menu = menubar.addMenu('Help')
@@ -1771,6 +1811,10 @@ class ColorDetectionApp(QMainWindow):
         simulate_magnet_error_action = QAction('Simulate Magnet Zero Error', self, checkable=True)
         simulate_magnet_error_action.triggered.connect(self.toggle_simulate_magnet_error)
         debug_menu.addAction(simulate_magnet_error_action)
+
+        close_project_action = QAction('Close Project', self)
+        close_project_action.triggered.connect(self.close_project)
+        project_menu.addAction(close_project_action)
 
         # Preferences
         if platform.system() == 'Darwin':  # macOS
@@ -2465,7 +2509,6 @@ class FadingSplashScreen(QSplashScreen):
         self.fade_anim.start()
 
 
-
 class AppLoader(QObject):
     progress_updated = pyqtSignal(int, str)
     loading_finished = pyqtSignal(MainMenu)
@@ -2491,7 +2534,6 @@ class AppLoader(QObject):
         time.sleep(0.3)
 
         self.progress_updated.emit(60, "Creating menu...")
-        self.main_menu.create_menu()
         time.sleep(0.1)
         self.progress_updated.emit(r.randint(63,79), "Creating menu...")
         time.sleep(r.randint(50,200)/100)
@@ -2509,9 +2551,6 @@ class AppLoader(QObject):
         self.progress_updated.emit(100, "Finalizing...")
         time.sleep(r.randint(50, 200) / 100)
         self.loading_finished.emit(self.main_menu)
-
-
-
 
 
 
