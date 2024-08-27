@@ -6,7 +6,28 @@ import random as r
 import sys
 import time
 from dataclasses import dataclass
-from s826.py import *
+from s826 import setChanVolt, detectBoard
+import traceback
+import logging
+from PyQt5.QtMultimedia import QSound, QMediaPlayer, QMediaContent
+from PyQt5.QtCore import QUrl
+import wmi
+import sys
+
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
+                             QLineEdit, QFormLayout, QGroupBox, QTabWidget, QWidget, QStyleFactory)
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QLinearGradient
+from PyQt5.QtCore import Qt, QSize
+
+
+
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
+from PyQt5.QtCore import QTimer, Qt, QUrl
+from PyQt5.QtGui import QColor
+from PyQt5.QtMultimedia import QSound
 
 import cv2
 import markdown
@@ -17,11 +38,18 @@ from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
     QButtonGroup, QSplashScreen, QMessageBox, QTextBrowser, QAction, QInputDialog, QGraphicsOpacityEffect, QSizePolicy,
-    QSpacerItem, QShortcut,
+    QSpacerItem, QShortcut, QDoubleSpinBox
 )
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QWidget, QFormLayout,
                              QLineEdit, QSpinBox, QPushButton, QDialogButtonBox, QFileDialog)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout
+
+logging.basicConfig(filename='s826Debug.log', level=logging.DEBUG,
+                    format='s826DEBUG | %(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(filename='vantage_debug.log', level=logging.DEBUG,
+                    format='VantageDebug | %(asctime)s - %(levelname)s - %(message)s')
+
 
 if platform.system() == 'Darwin':
     from Foundation import NSBundle
@@ -29,28 +57,364 @@ if platform.system() == 'Darwin':
     info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
     info['CFBundleName'] = "VANTAGE"
 
-VERSION = "3.1.1b"
+VERSION = "4.0.1b"
+
+DARK_MODE_STYLE = """
+    QMainWindow, QWidget {
+        background-color: #2B2B2B;
+        color: #FFFFFF;
+    }
+    QMenuBar, QMenu {
+        background-color: #2B2B2B;
+        color: #FFFFFF;
+    }
+    QMenuBar::item:selected, QMenu::item:selected {
+        background-color: #3A3A3A;
+    }
+    QLabel, QCheckBox, QRadioButton {
+        color: #FFFFFF;
+    }
+    QPushButton {
+        background-color: #3A3A3A;
+        color: #FFFFFF;
+        border: 1px solid #555555;
+        padding: 5px;
+        border-radius: 3px;
+    }
+    QPushButton:hover {
+        background-color: #4A4A4A;
+    }
+    QPushButton:pressed {
+        background-color: #555555;
+    }
+    QGroupBox {
+        border: 1px solid #555555;
+        margin-top: 0.5em;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        left: 10px;
+        padding: 0 3px 0 3px;
+    }
+    QSlider::handle:horizontal {
+        background-color: #4A4A4A;
+    }
+    QLineEdit, QSpinBox, QDoubleSpinBox {
+        background-color: #3A3A3A;
+        color: #FFFFFF;
+        border: 1px solid #555555;
+        padding: 2px;
+    }
+    QTextBrowser {
+        background-color: #2B2B2B;
+        color: #FFFFFF;
+        border: 1px solid #555555;
+    }
+    QScrollBar:vertical, QScrollBar:horizontal {
+        background-color: #2B2B2B;
+        width: 12px;
+        margin: 0px;
+    }
+    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+        background-color: #4A4A4A;
+        border-radius: 6px;
+        min-height: 20px;
+    }
+    QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
+        background-color: #555555;
+    }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+        height: 0px;
+    }
+"""
+
+def global_exception_handler(exctype, value, tb):
+    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
+    print(f"Uncaught exception:\n{error_msg}")
+    logging.critical(f"Uncaught exception:\n{error_msg}")
+    QMessageBox.critical(None, "Critical Error", f"An unexpected error occurred:\n{str(value)}\n\nPlease check the log file for more details.")
+
+sys.excepthook = global_exception_handler
 
 
-class PreferencesDialog(QDialog):
+class ModernDialog(QDialog):
+    def __init__(self, parent=None, title=""):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.apply_theme(True)  # Start with dark theme by default
+
+    def apply_theme(self, is_dark):
+        if is_dark:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #2B2B2B;
+                    color: #FFFFFF;
+                }
+                QLabel {
+                    color: #FFFFFF;
+                }
+                QLineEdit, QSpinBox, QDoubleSpinBox {
+                    background-color: #3A3A3A;
+                    color: #FFFFFF;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+                QPushButton {
+                    background-color: #4a90e2;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #357abd;
+                }
+                QPushButton:pressed {
+                    background-color: #2a5f9e;
+                }
+                QGroupBox {
+                    font-weight: bold;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    margin-top: 10px;
+                    color: #FFFFFF;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 3px 0 3px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #f0f0f0;
+                    color: #333333;
+                }
+                QLabel {
+                    color: #333333;
+                }
+                QLineEdit, QSpinBox, QDoubleSpinBox {
+                    background-color: white;
+                    color: #333333;
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+                QPushButton {
+                    background-color: #4a90e2;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #357abd;
+                }
+                QPushButton:pressed {
+                    background-color: #2a5f9e;
+                }
+                QGroupBox {
+                    font-weight: bold;
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    margin-top: 10px;
+                    color: #333333;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 3px 0 3px;
+                }
+            """)
+
+
+class ModernTabWidget(QTabWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Preferences")
-        self.setMinimumSize(400, 300)
-        self.settings = QSettings("VANTAGE", "ColorDetectionApp")
+        self.apply_theme(True)  # Start with dark theme by default
+
+    def apply_theme(self, is_dark):
+        if is_dark:
+            self.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #555555;
+                    background: #2B2B2B;
+                    border-radius: 4px;
+                }
+                QTabWidget::tab-bar {
+                    left: 5px;
+                }
+                QTabBar::tab {
+                    background: #3A3A3A;
+                    color: #FFFFFF;
+                    border: 1px solid #555555;
+                    border-bottom-color: #555555;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 5px;
+                }
+                QTabBar::tab:selected, QTabBar::tab:hover {
+                    background: #4a90e2;
+                    color: white;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QTabWidget::pane {
+                    border: 1px solid #cccccc;
+                    background: white;
+                    border-radius: 4px;
+                }
+                QTabWidget::tab-bar {
+                    left: 5px;
+                }
+                QTabBar::tab {
+                    background: #e0e0e0;
+                    color: #333333;
+                    border: 1px solid #cccccc;
+                    border-bottom-color: #cccccc;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                    padding: 5px;
+                }
+                QTabBar::tab:selected, QTabBar::tab:hover {
+                    background: #4a90e2;
+                    color: white;
+                }
+            """)
+
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About VANTAGE")
+        self.setFixedSize(550, 550)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
 
-        self.setup_general_tab()
+        # Icon (flipped colors)
+        icon_label = QLabel(self)
+        pixmap = QPixmap("assets/v3/vtg_icon_comet.png")
+        inverted_pixmap = self.invert_pixmap(pixmap)
+        icon_label.setPixmap(inverted_pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon_label)
 
-        # Add OK and Cancel buttons
+        # Title
+        title_label = QLabel("VANTAGE", self)
+        title_label.setFont(QFont("Roboto", 28, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("background: -webkit-linear-gradient(top, #007AFF, #00BFFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent;")
+        layout.addWidget(title_label)
+
+        # Version
+        version_label = QLabel(f"Version {VERSION}", self)
+        version_label.setFont(QFont("Roboto", 12))
+        version_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(version_label)
+
+        # Description
+        description = QTextBrowser(self)
+        description.setOpenExternalLinks(True)
+        description.setHtml(f"""
+        <div style='text-align: center; font-family: Roboto, Arial, sans-serif;'>
+            <p style='font-size: 16px; font-weight: bold; margin: 20px 0;'>
+                <span style='color: #007AFF;'>V</span>ision 
+                <span style='color: #007AFF;'>A</span>ssisted 
+                <span style='color: #007AFF;'>N</span>ano-particle 
+                <span style='color: #007AFF;'>T</span>racking and 
+                <span style='color: #007AFF;'>G</span>uided 
+                <span style='color: #007AFF;'>E</span>xtraction
+            </p>
+            <p style='font-size: 14px; margin: 15px 0;'>
+                Developed by<br>
+                <strong>Alfa Ozaltin</strong> and <strong> Nil Ertok <strong><br>
+                @ Stanford University
+            </p>
+            <p style='margin: 20px 0;'>
+                <a href='https://vantage.software' style='color: #007AFF; text-decoration: none; font-weight: bold;'>Visit VANTAGE Website</a>
+            </p>
+            <p style='font-size: 12px; color: #888;'>
+                © 2024 Stanford University & VX Software. All rights reserved.
+            </p>
+        </div>
+        """)
+        description.setStyleSheet("background-color: transparent; border: none;")
+        layout.addWidget(description)
+
+    def invert_pixmap(self, pixmap):
+        img = pixmap.toImage()
+        img.invertPixels()
+        return QPixmap.fromImage(img)
+
+    def apply_theme(self, is_dark):
+        if is_dark:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #1E1E1E;
+                    color: #FFFFFF;
+                }
+                QLabel {
+                    color: #FFFFFF;
+                }
+                QTextBrowser {
+                    color: #FFFFFF;
+                    background-color: transparent;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #F5F5F5;
+                    color: #000000;
+                }
+                QLabel {
+                    color: #000000;
+                }
+                QTextBrowser {
+                    color: #000000;
+                    background-color: transparent;
+                }
+            """)
+
+class PreferencesDialog(ModernDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent, "Preferences")
+        self.setMinimumSize(500, 400)
+        self.settings = QSettings("VANTAGE", "ColorDetectionApp")
+
+        self.main_layout = QVBoxLayout(self)
+
+        self.create_tab_widget()
+        self.setup_tabs()
+
+        self.create_button_box()
+
+    def create_tab_widget(self):
+        self.tab_widget = ModernTabWidget(self)
+        self.main_layout.addWidget(self.tab_widget)
+
+    def setup_tabs(self):
+        self.setup_general_tab()
+        self.setup_camera_tab()
+        self.setup_analysis_tab()
+
+    def create_button_box(self):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.save_preferences)
         button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
+        self.main_layout.addWidget(button_box)
 
     def setup_general_tab(self):
         general_tab = QWidget()
+        self.tab_widget.addTab(general_tab, QIcon("assets/general_icon.png"), "General")
+
         general_layout = QFormLayout(general_tab)
 
         self.default_project_location = QLineEdit(self.settings.value("default_project_location", ""))
@@ -61,22 +425,44 @@ class PreferencesDialog(QDialog):
         location_layout.addWidget(self.default_project_location)
         location_layout.addWidget(browse_button)
 
+        self.auto_save_interval = QSpinBox()
+        self.auto_save_interval.setRange(1, 60)
+        self.auto_save_interval.setValue(int(self.settings.value("auto_save_interval", 5)))
+
+        general_layout.addRow(QLabel("Default Project Location:"), location_layout)
+        general_layout.addRow(QLabel("Auto-save Interval (minutes):"), self.auto_save_interval)
+
+    def setup_camera_tab(self):
+        camera_tab = QWidget()
+        self.tab_widget.addTab(camera_tab, QIcon("assets/camera_icon.png"), "Camera")
+
+        camera_layout = QFormLayout(camera_tab)
+
         self.default_camera_port = QSpinBox()
         self.default_camera_port.setRange(0, 10)
         self.default_camera_port.setValue(int(self.settings.value("default_camera_port", 0)))
 
         self.default_resolution = QLineEdit(self.settings.value("default_resolution", "1280x720"))
 
-        self.auto_save_interval = QSpinBox()
-        self.auto_save_interval.setRange(1, 60)
-        self.auto_save_interval.setValue(int(self.settings.value("auto_save_interval", 5)))
+        camera_layout.addRow(QLabel("Default Camera Port:"), self.default_camera_port)
+        camera_layout.addRow(QLabel("Default Resolution:"), self.default_resolution)
 
-        general_layout.addRow("Default Project Location:", location_layout)
-        general_layout.addRow("Default Camera Port:", self.default_camera_port)
-        general_layout.addRow("Default Resolution:", self.default_resolution)
-        general_layout.addRow("Auto-save Interval (minutes):", self.auto_save_interval)
+    def setup_analysis_tab(self):
+        analysis_tab = QWidget()
+        self.tab_widget.addTab(analysis_tab, QIcon("assets/analysis_icon.png"), "Analysis")
 
-        self.layout().addWidget(general_tab)
+        analysis_layout = QFormLayout(analysis_tab)
+
+        self.min_particle_size = QSpinBox()
+        self.min_particle_size.setRange(1, 1000)
+        self.min_particle_size.setValue(int(self.settings.value("min_particle_size", 30)))
+
+        self.max_particle_size = QSpinBox()
+        self.max_particle_size.setRange(1, 10000)
+        self.max_particle_size.setValue(int(self.settings.value("max_particle_size", 600)))
+
+        analysis_layout.addRow(QLabel("Minimum Particle Size:"), self.min_particle_size)
+        analysis_layout.addRow(QLabel("Maximum Particle Size:"), self.max_particle_size)
 
     def browse_project_location(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Default Project Location")
@@ -85,10 +471,152 @@ class PreferencesDialog(QDialog):
 
     def save_preferences(self):
         self.settings.setValue("default_project_location", self.default_project_location.text())
+        self.settings.setValue("auto_save_interval", self.auto_save_interval.value())
         self.settings.setValue("default_camera_port", self.default_camera_port.value())
         self.settings.setValue("default_resolution", self.default_resolution.text())
-        self.settings.setValue("auto_save_interval", self.auto_save_interval.value())
+        self.settings.setValue("min_particle_size", self.min_particle_size.value())
+        self.settings.setValue("max_particle_size", self.max_particle_size.value())
         self.accept()
+
+    def apply_theme(self, is_dark):
+        super().apply_theme(is_dark)
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.apply_theme(is_dark)
+
+
+class FlashingTimedDialog(QDialog):
+    def __init__(self, title, message, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setMinimumWidth(400)
+
+        layout = QVBoxLayout(self)
+
+        # Add icon and message in a horizontal layout
+        message_layout = QHBoxLayout()
+
+        # Add critical error icon
+        icon_label = QLabel()
+        icon = QIcon("assets/critical_error_icon.png")  # Make sure this icon exists in your assets folder
+        icon_label.setPixmap(icon.pixmap(QSize(64, 64)))
+        message_layout.addWidget(icon_label)
+
+        # Message label with bold, larger font
+        self.message_label = QLabel(message)
+        font = QFont("Arial", 14, QFont.Bold)
+        self.message_label.setFont(font)
+        self.message_label.setWordWrap(True)
+        self.message_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.message_label.setStyleSheet("color: white; padding: 10px;")
+        message_layout.addWidget(self.message_label, 1)
+
+        layout.addLayout(message_layout)
+
+        self.timer_label = QLabel()
+        self.timer_label.setAlignment(Qt.AlignCenter)
+        self.timer_label.setStyleSheet("color: white; font-weight: bold;")
+        layout.addWidget(self.timer_label)
+
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.try_accept)
+        self.ok_button.setEnabled(False)
+        self.ok_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF4136;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:disabled {
+                background-color: #999999;
+            }
+        """)
+        layout.addWidget(self.ok_button)
+
+        self.flash_timer = QTimer(self)
+        self.flash_timer.timeout.connect(self.flash)
+        self.flash_timer.start(500)
+
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)
+
+        self.countdown = 8
+        self.update_countdown()
+
+        self.flash_state = False
+
+        # Sound setup
+        self.beep_sound = None
+        self.media_player = None
+        try:
+            self.beep_sound = QSound("assets/error.wav")
+            self.play_beep()  # Play the sound immediately
+        except Exception as e:
+            logging.error(f"Failed to initialize QSound: {str(e)}")
+            try:
+                self.media_player = QMediaPlayer()
+                self.media_player.setMedia(QMediaContent(QUrl.fromLocalFile("assets/error.wav")))
+                self.media_player.play()
+            except Exception as e:
+                logging.error(f"Failed to initialize QMediaPlayer: {str(e)}")
+
+        self.beep_timer = QTimer(self)
+        self.beep_timer.timeout.connect(self.play_beep)
+        self.beep_timer.start(2000)
+
+        # Set initial background color
+        self.setStyleSheet("background-color: #D50000;")
+
+    def play_beep(self):
+        try:
+            if self.beep_sound:
+                self.beep_sound.play()
+            elif self.media_player:
+                self.media_player.setPosition(0)
+                self.media_player.play()
+        except Exception as e:
+            logging.error(f"Failed to play sound: {str(e)}")
+
+
+    def flash(self):
+        if self.flash_state:
+            self.setStyleSheet("background-color: #D50000;")
+        else:
+            self.setStyleSheet("background-color: #FF1744;")
+        self.flash_state = not self.flash_state
+
+    def update_countdown(self):
+        self.countdown -= 1
+        if self.countdown > 0:
+            self.timer_label.setText(f"This message can be dismissed in {self.countdown} seconds")
+        else:
+            self.countdown_timer.stop()
+            self.ok_button.setEnabled(True)
+            self.timer_label.setText("You can now dismiss this message")
+
+
+    def try_accept(self):
+        if self.countdown <= 0:
+            self.flash_timer.stop()
+            self.beep_timer.stop()
+            super().accept()
+
+    def closeEvent(self, event):
+        if self.countdown > 0:
+            event.ignore()
+        else:
+            event.accept()
+
+    def keyPressEvent(self, event):
+        if self.countdown > 0:
+            event.ignore()
+        else:
+            super().keyPressEvent(event)
 
 
 class LoadingSplashScreen(QSplashScreen):
@@ -130,10 +658,9 @@ class LoadingSplashScreen(QSplashScreen):
         self.repaint()
 
 
-class ProjectSettingsDialog(QDialog):
+class ProjectSettingsDialog(ModernDialog):
     def __init__(self, parent=None, current_settings=None):
-        super().__init__(parent)
-        self.setWindowTitle("Project Settings")
+        super().__init__(parent, "Project Settings")
         self.setMinimumSize(400, 200)
         self.current_settings = current_settings or {}
 
@@ -146,8 +673,6 @@ class ProjectSettingsDialog(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
-
-        self.setLayout(layout)
 
     def setup_camera_settings(self):
         group_box = QGroupBox("Camera Settings")
@@ -170,6 +695,129 @@ class ProjectSettingsDialog(QDialog):
             'camera_port': self.camera_port.value(),
             'resolution': self.resolution.text(),
         }
+
+
+class MagnetDebugDialog(ModernDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent, "Magnet Debug")
+        self.setMinimumSize(400, 300)
+
+        layout = QVBoxLayout(self)
+
+        # Driver Check
+        driver_group = QGroupBox("Driver Status")
+        driver_layout = QVBoxLayout(driver_group)
+        self.driver_label = QLabel("Sensoray 826 Driver: Checking...")
+        self.filter_label = QLabel("Sensoray 826 Filter: Checking...")
+        driver_layout.addWidget(self.driver_label)
+        driver_layout.addWidget(self.filter_label)
+        layout.addWidget(driver_group)
+
+        # Board ID
+        board_group = QGroupBox("Board Information")
+        board_layout = QVBoxLayout(board_group)
+        self.board_id_label = QLabel("Board ID: Checking...")
+        board_layout.addWidget(self.board_id_label)
+        layout.addWidget(board_group)
+
+        # Magnet Control
+        magnet_group = QGroupBox("Magnet Control")
+        magnet_layout = QVBoxLayout(magnet_group)
+        self.totalM_spinbox = QDoubleSpinBox()
+        self.totalM_spinbox.setRange(-4, 4)
+        self.totalM_spinbox.setSingleStep(0.1)
+        self.totalM_spinbox.setDecimals(1)
+        magnet_layout.addWidget(QLabel('Magnet Amp:'))
+        magnet_layout.addWidget(self.totalM_spinbox)
+
+        self.apply_button = QPushButton("Apply Voltages")
+        self.apply_button.clicked.connect(self.apply_voltages)
+        magnet_layout.addWidget(self.apply_button)
+        layout.addWidget(magnet_group)
+
+        # Close Button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+        layout.addWidget(close_button)
+
+        # Check driver and board ID
+        QTimer.singleShot(0, self.check_driver_and_board)
+
+
+    def check_driver_and_board(self):
+        if sys.platform.startswith('win'):
+            c = wmi.WMI()
+
+            # Check for Sensoray 826 Driver
+            driver_devices = c.Win32_PnPEntity(Name="Sensoray 826 Driver")
+            driver_found = len(list(driver_devices)) > 0
+            self.driver_label.setText(f"Sensoray 826 Driver: {'Found' if driver_found else 'Not Found'}")
+            self.driver_label.setStyleSheet(f"color: {'green' if driver_found else 'red'}")
+
+            # Check for Sensoray 826 Filter
+            filter_devices = c.Win32_PnPEntity(Name="Sensoray 826 Filter")
+            filter_found = len(list(filter_devices)) > 0
+            self.filter_label.setText(f"Sensoray 826 Filter: {'Found' if filter_found else 'Not Found'}")
+            self.filter_label.setStyleSheet(f"color: {'green' if filter_found else 'red'}")
+
+            # Both should be present
+            all_found = driver_found and filter_found
+        else:
+            all_found = False
+            self.driver_label.setText("Sensoray 826 Driver: N/A (Not Windows)")
+            self.filter_label.setText("Sensoray 826 Filter: N/A (Not Windows)")
+
+        # Check for board ID
+        if all_found:
+            try:
+                board_id = detectBoard()
+                self.board_id_label.setText(f"Board ID: {board_id}")
+                self.board_id_label.setStyleSheet("color: green")
+            except Exception as e:
+                self.board_id_label.setText(f"Board ID: Error - {str(e)}")
+                self.board_id_label.setStyleSheet("color: red")
+        else:
+            self.board_id_label.setText("Board ID: N/A (Driver or Filter not found)")
+            self.board_id_label.setStyleSheet("color: red")
+
+    def apply_voltages(self):
+        totM = self.totalM_spinbox.value()
+        upM = totM * 0.57
+        botM = totM * -0.57
+        if upM > 2.28 or upM < -2.28:
+            setChanVolt(4, 0)
+            setChanVolt(7, 0)
+            logging.warning('Magnet settings zeroed due to unsafe upper magnet value.')
+            logging.critical(
+                'Safety Protocol: magnet amp above safe operating value. Contact VANTAGE Support with error code SP1 before reusing the software.')
+            QMessageBox.critical(self, "Safety Error",
+                                 "Magnet amp above safe operating value. Contact VANTAGE Support with error code SP1 before reusing the software.")
+            return
+
+        if botM > 3 or botM < -2.28:
+            setChanVolt(4, 0)
+            setChanVolt(7, 0)
+            logging.warning('Magnet settings zeroed due to unsafe bottom magnet value.')
+            logging.critical(
+                'Safety Protocol: magnet amp above safe operating value. Contact VANTAGE Support with error code SP1 before reusing the software.')
+            QMessageBox.critical(self, "Safety Error",
+                                 "Magnet amp above safe operating value. Contact VANTAGE Support with error code SP1 before reusing the software.")
+            return
+
+        try:
+            logging.info(f"Attempting to set voltages: Up = {upM}V, Bottom = {botM}V - Amp: {totM}")
+            setChanVolt(4, upM)
+            setChanVolt(7, botM)
+            logging.info('Magnet settings applied successfully.')
+            QMessageBox.information(self, "Success", f"Voltages applied: Up = {upM}V, Bottom = {botM}V")
+
+        except Exception as e:
+            logging.error(f"Failed to apply voltages: {str(e)}")
+            setChanVolt(4, 0)
+            setChanVolt(7, 0)
+            logging.warning('Magnet settings zeroed due to error.')
+            logging.error(traceback.format_exc())
+            QMessageBox.critical(self, "Error", f"Failed to apply voltages: {str(e)}")
 
 
 class RecentProjectsManager:
@@ -397,8 +1045,9 @@ class MainMenu(QMainWindow):
             help_menu.addAction(preferences_action)
 
     def show_about(self):
-        about_text = f"VANTAGE \n\nVersion: {VERSION}\n\nVision Assisted Nano-particle Tracking and Guided Extraction\n\n Developed by Alfa Ozaltin and Nil Ertok @ Stanford University"
-        QMessageBox.about(self, "About VANTAGE", about_text)
+        about_dialog = AboutDialog(self)
+        about_dialog.apply_theme(True)
+        about_dialog.exec_()
 
     def show_user_manual(self):
         user_manual_dialog = UserManualDialog(self)
@@ -857,6 +1506,7 @@ class VideoWidgetWithOverlay(QLabel):
         self.update()
 
 
+
 class ColorDetector:
     def __init__(self, initial_value):
         self.set_threshold(initial_value)
@@ -1063,8 +1713,11 @@ class ColorDetectionApp(QMainWindow):
 
         self.update_title()
 
+        self.apply_theme(True)
+
     def create_menu(self):
         menubar = self.menuBar()
+        self.simulate_magnet_error = False  # Add this line
 
         # File menu
         file_menu = menubar.addMenu('&File')
@@ -1108,6 +1761,17 @@ class ColorDetectionApp(QMainWindow):
         user_manual_action.triggered.connect(self.show_user_manual)
         help_menu.addAction(user_manual_action)
 
+        # Magnet Debug
+        magnet_debug_action = QAction('Magnet Debug', self)
+        magnet_debug_action.triggered.connect(self.show_magnet_debug)
+        project_menu.addAction(magnet_debug_action)
+
+        debug_menu = menubar.addMenu('Simulate')
+
+        simulate_magnet_error_action = QAction('Simulate Magnet Zero Error', self, checkable=True)
+        simulate_magnet_error_action.triggered.connect(self.toggle_simulate_magnet_error)
+        debug_menu.addAction(simulate_magnet_error_action)
+
         # Preferences
         if platform.system() == 'Darwin':  # macOS
             preferences_action = QAction('Preferences...', self)
@@ -1121,6 +1785,92 @@ class ColorDetectionApp(QMainWindow):
             preferences_action.setShortcut(QKeySequence('Ctrl+,'))
             preferences_action.triggered.connect(self.show_preferences)
             file_menu.addAction(preferences_action)
+
+    def apply_theme(self, is_dark):
+        if is_dark:
+            self.setStyleSheet(DARK_MODE_STYLE)
+            app = QApplication.instance()
+            app.setPalette(self.get_dark_palette())
+        else:
+            self.setStyleSheet("")
+            app = QApplication.instance()
+            app.setPalette(app.style().standardPalette())
+
+        self.update_ui_for_theme(is_dark)
+
+        # Update the checkbox state
+        if hasattr(self, 'dark_mode_switch'):
+            self.dark_mode_switch.setChecked(is_dark)
+    @staticmethod
+    def get_dark_palette():
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.WindowText, Qt.white)
+        dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
+        dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+        dark_palette.setColor(QPalette.Text, Qt.white)
+        dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ButtonText, Qt.white)
+        dark_palette.setColor(QPalette.BrightText, Qt.red)
+        dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+        return dark_palette
+
+    def toggle_theme(self, state):
+        is_dark = state == Qt.Checked
+        self.apply_theme(is_dark)
+        self.update_ui_for_theme(is_dark)
+    def toggle_simulate_magnet_error(self, checked):
+        self.simulate_magnet_error = checked
+        if checked:
+            QMessageBox.warning(self, 'Debug',
+                                'Magnet zero error simulation is now ON. The app will show an error message when closing.')
+        else:
+            QMessageBox.information(self, 'Debug', 'Magnet zero error simulation is now OFF.')
+
+    def update_ui_for_theme(self, is_dark):
+        # Update specific UI elements for the theme
+        if is_dark:
+            text_color = "white"
+            bg_color = "#2B2B2B"
+        else:
+            text_color = "black"
+            bg_color = "white"
+
+        # Update labels
+        for label in self.findChildren(QLabel):
+            label.setStyleSheet(f"color: {text_color};")
+
+        # Update group boxes
+        for group_box in self.findChildren(QGroupBox):
+            group_box.setStyleSheet(f"color: {text_color}; background-color: {bg_color};")
+
+        # Update sliders
+        for slider in self.findChildren(QSlider):
+            slider.setStyleSheet(f"background-color: {bg_color};")
+
+        # Update buttons
+        for button in self.findChildren(QPushButton):
+            button.setStyleSheet(f"color: {text_color}; background-color: {bg_color};")
+
+        # Update video widgets
+        for video_widget in [self.original_view, self.red_view, self.green_view]:
+            video_widget.setStyleSheet(f"color: {text_color}; background-color: black;")
+
+        # Update the main window background
+        self.setStyleSheet(f"background-color: {bg_color};")
+
+    def show_magnet_debug(self):
+        try:
+            magnet_debug_dialog = MagnetDebugDialog(self)
+            magnet_debug_dialog.exec_()
+        except Exception as e:
+            logging.error(f"Error in show_magnet_debug: {str(e)}")
+            logging.error(traceback.format_exc())
+            QMessageBox.critical(self, "Error", f"Failed to open Magnet Debug dialog: {str(e)}")
 
     def remove_project_menus(self):
         menubar = self.menuBar()
@@ -1174,9 +1924,15 @@ class ColorDetectionApp(QMainWindow):
             self.icon_label.setGeometry(self.width() - 40, 10, 32, 32)
 
     def show_preferences(self):
-        preferences_dialog = PreferencesDialog(self)
-        if preferences_dialog.exec_() == QDialog.Accepted:
-            self.load_preferences()
+        try:
+            preferences_dialog = PreferencesDialog(self)
+            preferences_dialog.apply_theme(self.dark_mode_switch.isChecked())
+            if preferences_dialog.exec_() == QDialog.Accepted:
+                self.load_preferences()
+        except Exception as e:
+            logging.error(f"Error in show_preferences: {str(e)}")
+            logging.error(traceback.format_exc())
+            QMessageBox.critical(self, "Error", f"Failed to show preferences: {str(e)}")
 
     def show_project_settings(self):
         current_settings = {
@@ -1191,8 +1947,13 @@ class ColorDetectionApp(QMainWindow):
             self.update_title()
 
     def show_about(self):
-        about_text = f"VANTAGE \n\nVersion: {VERSION}\n\nVision Assisted Nano-particle Tracking and Guided Extraction\n\n Developed by Alfa Ozaltin and Nil Ertok @ Stanford University"
-        QMessageBox.about(self, "About VANTAGE", about_text)
+        about_dialog = AboutDialog(self)
+        if hasattr(self, 'dark_mode_switch'):
+            about_dialog.apply_theme(self.dark_mode_switch.isChecked())
+        else:
+            # Default to dark theme if dark_mode_switch doesn't exist
+            about_dialog.apply_theme(True)
+        about_dialog.exec_()
 
     def show_user_manual(self):
         user_manual_dialog = UserManualDialog(self)
@@ -1240,30 +2001,34 @@ class ColorDetectionApp(QMainWindow):
             self.fade_animation.start()
 
 
+
     def apply_particle_analysis_settings(self):
         if hasattr(self, 'video_processor'):
             self.video_processor.red_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
             self.video_processor.green_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+        if hasattr(self, 'min_size_spinbox'):
+            self.min_size_spinbox.setValue(self.min_particle_size)
+        if hasattr(self, 'max_size_spinbox'):
+            self.max_size_spinbox.setValue(self.max_particle_size)
 
     def load_preferences(self):
+        settings = QSettings("VANTAGE", "ColorDetectionApp")
+
         # Load general preferences
-        self.default_project_location = self.settings.value("default_project_location", "")
-        self.auto_save_interval = int(self.settings.value("auto_save_interval", 5))
+        self.default_project_location = settings.value("default_project_location", "")
+        self.auto_save_interval = int(settings.value("auto_save_interval", 5))
 
         # Load camera preferences
-        self.default_camera_port = int(self.settings.value("default_camera_port", 0))
-        self.default_resolution = self.settings.value("default_resolution", "1280x720")
-
-        self.setup_auto_save()
-
-        self.red_threshold = int(self.settings.value("red_threshold", 20))
-        self.green_threshold = int(self.settings.value("green_threshold", 20))
-
-        self.apply_color_detection_settings()
+        self.default_camera_port = int(settings.value("default_camera_port", 0))
+        self.default_resolution = settings.value("default_resolution", "1280x720")
 
         # Load particle analysis preferences
-        self.min_particle_size = int(self.settings.value("min_particle_size", 30))
-        self.max_particle_size = int(self.settings.value("max_particle_size", 600))
+        self.min_particle_size = int(settings.value("min_particle_size", 30))
+        self.max_particle_size = int(settings.value("max_particle_size", 600))
+
+        # Apply the loaded preferences
+        self.setup_auto_save()
+        self.apply_camera_settings()
         self.apply_particle_analysis_settings()
 
     def setup_timer(self):
@@ -1303,7 +2068,7 @@ class ColorDetectionApp(QMainWindow):
             self.auto_save_timer.stop()
         self.auto_save_timer = QTimer(self)
         self.auto_save_timer.timeout.connect(self.auto_save)
-        self.auto_save_timer.start(self.auto_save_interval * 1000)
+        self.auto_save_timer.start(self.auto_save_interval * 60 * 1000)  # Convert minutes to milliseconds
 
     def apply_color_detection_settings(self):
         if hasattr(self, 'video_processor'):
@@ -1333,6 +2098,12 @@ class ColorDetectionApp(QMainWindow):
         if self.current_project_path and self.unsaved_changes:
             self.save_project()
             self.show_autosave_icon()
+
+    def apply_camera_settings(self):
+        if hasattr(self, 'video_processor'):
+            self.video_processor.set_camera_port(self.default_camera_port)
+            width, height = map(int, self.default_resolution.split('x'))
+            self.video_processor.set_resolution(width, height)
 
     def setup_ui(self):
         self.setWindowTitle(f"VANTAGE - {self.project_name}")
@@ -1473,7 +2244,7 @@ class ColorDetectionApp(QMainWindow):
 
     def setup_dark_mode_switch(self):
         self.dark_mode_switch = QCheckBox("Dark Mode")
-        self.dark_mode_switch.setChecked(True)
+        self.dark_mode_switch.setChecked(True)  # Set to checked by default
         self.dark_mode_switch.stateChanged.connect(self.toggle_theme)
         self.control_layout.addWidget(self.dark_mode_switch)
 
@@ -1525,25 +2296,6 @@ class ColorDetectionApp(QMainWindow):
         self.unsaved_changes = True
         self.update_title()
 
-    def toggle_theme(self, state):
-        is_dark = state == Qt.Checked
-        self.set_theme(is_dark)
-
-    def set_theme(self, is_dark):
-        if is_dark:
-            self.setStyleSheet("""
-                QMainWindow, QWidget { background-color: #2B2B2B; color: #FFFFFF; }
-                QLabel, QCheckBox, QRadioButton { color: #FFFFFF; }
-                QGroupBox { border: 1px solid #555555; }
-                QSlider::handle:horizontal { background-color: #4A4A4A; }
-            """)
-        else:
-            self.setStyleSheet("""
-                QMainWindow, QWidget { background-color: #FFFFFF; color: #000000; }
-                QLabel, QCheckBox, QRadioButton { color: #000000; }
-                QGroupBox { border: 1px solid #CCCCCC; }
-                QSlider::handle:horizontal { background-color: #DDDDDD; }
-            """)
 
     def update_title(self):
         title = f"VANTAGE - {self.project_name}"
@@ -1627,32 +2379,58 @@ class ColorDetectionApp(QMainWindow):
         self.update_title()
 
     def closeEvent(self, event):
-        self.timer.stop()
-        self.video_processor.release()
-        if self.unsaved_changes:
-            reply = QMessageBox.question(self, 'Save Project',
-                                         "Do you want to save the project before closing?",
-                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+        try:
+            self.timer.stop()
+            self.video_processor.release()
 
-            if reply == QMessageBox.Yes:
-                self.save_project()
-                QMessageBox.information(self, "Project Saved", "Project saved successfully.")
-                if self.unsaved_changes:  # If user cancelled the save dialog
+            try:
+                if self.simulate_magnet_error:
+                    raise Exception("Simulated magnet zeroing error")
+                setChanVolt(4, 0)
+                setChanVolt(7, 0)
+                logging.info('Magnet settings zeroed.')
+            except Exception as e:
+                error_msg = f"Failed to zero magnets: {str(e)}"
+                logging.critical(error_msg)
+
+                dialog = FlashingTimedDialog(
+                    'CRITICAL ERROR',
+                    'MAGNET AMP FAILED TO ZERO. MANUALLY SHUTDOWN POWER SUPPLIES AND ZERO MAGNET AMP USING BACKUP SOFTWARE',
+                    self
+                )
+                dialog.exec_()
+
+            if self.unsaved_changes:
+                reply = QMessageBox.question(self, 'Save Project',
+                                             "Do you want to save the project before closing?",
+                                             QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+
+                if reply == QMessageBox.Yes:
+                    self.save_project()
+                    QMessageBox.information(self, "Project Saved", "Project saved successfully.")
+                    if self.unsaved_changes:  # If user cancelled the save dialog
+                        event.ignore()
+                        return
+                elif reply == QMessageBox.Cancel:
                     event.ignore()
                     return
-            elif reply == QMessageBox.Cancel:
-                event.ignore()
-                return
 
-        if self.current_project_path and self.main_menu:
-            self.main_menu.recent_projects_manager.add(self.current_project_path)
-            self.main_menu.update_recent_projects()
+            if self.current_project_path and self.main_menu:
+                self.main_menu.recent_projects_manager.add(self.current_project_path)
+                self.main_menu.update_recent_projects()
 
-        self.video_processor.release()
-        if self.main_menu:
-            self.remove_project_menus()
-            self.main_menu.show()
-        event.accept()
+            if self.main_menu:
+                self.remove_project_menus()
+                self.main_menu.show()
+
+            event.accept()
+        except Exception as e:
+            error_msg = f"An error occurred while closing the application: {str(e)}\n{traceback.format_exc()}"
+            logging.critical(error_msg)
+
+            dialog.exec_()
+
+            event.ignore()
 
 
 class FadingSplashScreen(QSplashScreen):
@@ -1736,11 +2514,13 @@ class AppLoader(QObject):
 
 
 
+
 if __name__ == "__main__":
-    print(s826_open())
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
     app.setStyle("Fusion")
+    app.setPalette(ColorDetectionApp.get_dark_palette())
+    app.setStyleSheet(DARK_MODE_STYLE)
 
     app_icon = QIcon()
     icon_sizes = [16, 24, 32, 48, 64, 128, 256]
