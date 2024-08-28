@@ -1,40 +1,23 @@
 import ctypes
 import json
+import logging
 import os
 import platform
 import random as r
 import sys
 import time
-from dataclasses import dataclass
-from s826 import setChanVolt, detectBoard
 import traceback
-import logging
-from PyQt5.QtMultimedia import QSound, QMediaPlayer, QMediaContent
-from PyQt5.QtCore import QUrl
-import wmi
-import sys
-
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
-                             QLineEdit, QFormLayout, QGroupBox, QTabWidget, QWidget, QStyleFactory)
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QLinearGradient
-from PyQt5.QtCore import Qt, QSize
-
-
-
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
-from PyQt5.QtCore import QTimer, Qt, QUrl
-from PyQt5.QtGui import QColor
-from PyQt5.QtMultimedia import QSound
+from dataclasses import dataclass
 
 import cv2
 import markdown
 import numpy as np
+from PyQt5.QtCore import QUrl
 from PyQt5.QtCore import Qt, QTimer, QObject, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, \
     QSettings
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon, QKeySequence, QFont
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+from PyQt5.QtMultimedia import QSound
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
     QButtonGroup, QSplashScreen, QMessageBox, QTextBrowser, QAction, QInputDialog, QGraphicsOpacityEffect, QSizePolicy,
@@ -44,7 +27,9 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QWidget, QFormLayout,
                              QLineEdit, QSpinBox, QPushButton, QDialogButtonBox, QFileDialog)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout
 from PyQt5.QtWidgets import QMenu
+from PyQt5.QtWidgets import (QTabWidget)
 
+from s826 import setChanVolt, detectBoard
 
 logging.basicConfig(filename='s826Debug.log', level=logging.DEBUG,
                     format='s826DEBUG | %(asctime)s - %(levelname)s - %(message)s')
@@ -58,6 +43,8 @@ if platform.system() == 'Darwin':
     bundle = NSBundle.mainBundle()
     info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
     info['CFBundleName'] = "VANTAGE"
+else:
+    import wmi
 
 VERSION = "4.0.1b"
 
@@ -131,11 +118,13 @@ DARK_MODE_STYLE = """
     }
 """
 
+
 def global_exception_handler(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
     print(f"Uncaught exception:\n{error_msg}")
     logging.critical(f"Uncaught exception:\n{error_msg}")
-    QMessageBox.critical(None, "Critical Error", f"An unexpected error occurred:\n{str(value)}\n\nPlease check the log file for more details.")
+    QMessageBox.critical(None, "Critical Exception", f"An unexpected error occurred:\n{str(value)}\n\nPlease check the log file for more details.")
+
 
 sys.excepthook = global_exception_handler
 
@@ -1075,6 +1064,7 @@ class MainMenu(QMainWindow):
         super().__init__()
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(650, 500)
 
         self.recent_projects_manager = RecentProjectsManager()
         self.moving = False
