@@ -21,11 +21,11 @@ from PyQt5.QtMultimedia import QSound
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QSlider, QGroupBox, QSplitter, QCheckBox, QRadioButton,
     QButtonGroup, QSplashScreen, QMessageBox, QTextBrowser, QAction, QInputDialog, QGraphicsOpacityEffect, QSizePolicy,
-    QSpacerItem, QShortcut, QDoubleSpinBox
+    QSpacerItem, QShortcut, QDoubleSpinBox, QFrame
 )
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QWidget, QFormLayout,
                              QLineEdit, QSpinBox, QPushButton, QDialogButtonBox, QFileDialog)
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QHBoxLayout, QSizeGrip
 from PyQt5.QtWidgets import QMenu
 from PyQt5.QtWidgets import (QTabWidget)
 
@@ -131,8 +131,48 @@ sys.excepthook = global_exception_handler
 
 class ModernDialog(QDialog):
     def __init__(self, parent=None, title=""):
-        super().__init__(parent)
+        super().__init__(parent, Qt.FramelessWindowHint)
         self.setWindowTitle(title)
+        self.oldPos = self.pos()
+
+        # Main layout
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        # Custom title bar
+        self.title_bar = QWidget(self)
+        title_layout = QHBoxLayout(self.title_bar)
+        title_layout.setContentsMargins(10, 5, 10, 5)
+
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Arial", 12, QFont.Bold))
+        title_layout.addWidget(title_label)
+
+        title_layout.addStretch()
+
+        close_button = QPushButton("×")
+        close_button.setFixedSize(30, 30)
+        close_button.clicked.connect(self.close)
+        close_button.setStyleSheet("""
+            QPushButton {
+                border: none;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #FF5555;
+                color: white;
+            }
+        """)
+        title_layout.addWidget(close_button)
+
+        self.main_layout.addWidget(self.title_bar)
+
+        # Content widget
+        self.content_widget = QWidget(self)
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.main_layout.addWidget(self.content_widget)
+
         self.apply_theme(True)  # Start with dark theme by default
 
     def apply_theme(self, is_dark):
@@ -141,6 +181,7 @@ class ModernDialog(QDialog):
                 QDialog {
                     background-color: #2B2B2B;
                     color: #FFFFFF;
+                    border: 1px solid #555555;
                 }
                 QLabel {
                     color: #FFFFFF;
@@ -179,11 +220,13 @@ class ModernDialog(QDialog):
                     padding: 0 3px 0 3px;
                 }
             """)
+            self.title_bar.setStyleSheet("background-color: #1E1E1E;")
         else:
             self.setStyleSheet("""
                 QDialog {
                     background-color: #f0f0f0;
                     color: #333333;
+                    border: 1px solid #cccccc;
                 }
                 QLabel {
                     color: #333333;
@@ -222,6 +265,15 @@ class ModernDialog(QDialog):
                     padding: 0 3px 0 3px;
                 }
             """)
+            self.title_bar.setStyleSheet("background-color: #E0E0E0;")
+
+    def mousePressEvent(self, event):
+        self.oldPos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        delta = QPoint(event.globalPos() - self.oldPos)
+        self.move(self.x() + delta.x(), self.y() + delta.y())
+        self.oldPos = event.globalPos()
 
 
 class ModernTabWidget(QTabWidget):
@@ -374,24 +426,23 @@ class AboutDialog(QDialog):
                 }
             """)
 
+
 class PreferencesDialog(ModernDialog):
     def __init__(self, parent=None):
         super().__init__(parent, "Preferences")
         self.setMinimumSize(500, 400)
         self.settings = QSettings("VANTAGE", "ColorDetectionApp")
 
-        self.main_layout = QVBoxLayout(self)
+        # Setup the main layout
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
 
-        self.create_tab_widget()
         self.setup_tabs()
-
         self.create_button_box()
 
-    def create_tab_widget(self):
-        self.tab_widget = ModernTabWidget(self)
-        self.main_layout.addWidget(self.tab_widget)
-
     def setup_tabs(self):
+        self.tab_widget = ModernTabWidget(self)
+        self.content_layout.addWidget(self.tab_widget)
+
         self.setup_general_tab()
         self.setup_camera_tab()
         self.setup_analysis_tab()
@@ -400,11 +451,11 @@ class PreferencesDialog(ModernDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.save_preferences)
         button_box.rejected.connect(self.reject)
-        self.main_layout.addWidget(button_box)
+        self.content_layout.addWidget(button_box)
 
     def setup_general_tab(self):
         general_tab = QWidget()
-        self.tab_widget.addTab(general_tab, QIcon("assets/general_icon.png"), "General")
+        self.tab_widget.addTab(general_tab, "General")
 
         general_layout = QFormLayout(general_tab)
 
@@ -420,12 +471,12 @@ class PreferencesDialog(ModernDialog):
         self.auto_save_interval.setRange(1, 60)
         self.auto_save_interval.setValue(int(self.settings.value("auto_save_interval", 5)))
 
-        general_layout.addRow(QLabel("Default Project Location:"), location_layout)
-        general_layout.addRow(QLabel("Auto-save Interval (minutes):"), self.auto_save_interval)
+        general_layout.addRow("Default Project Location:", location_layout)
+        general_layout.addRow("Auto-save Interval (minutes):", self.auto_save_interval)
 
     def setup_camera_tab(self):
         camera_tab = QWidget()
-        self.tab_widget.addTab(camera_tab, QIcon("assets/camera_icon.png"), "Camera")
+        self.tab_widget.addTab(camera_tab, "Camera")
 
         camera_layout = QFormLayout(camera_tab)
 
@@ -435,12 +486,12 @@ class PreferencesDialog(ModernDialog):
 
         self.default_resolution = QLineEdit(self.settings.value("default_resolution", "1280x720"))
 
-        camera_layout.addRow(QLabel("Default Camera Port:"), self.default_camera_port)
-        camera_layout.addRow(QLabel("Default Resolution:"), self.default_resolution)
+        camera_layout.addRow("Default Camera Port:", self.default_camera_port)
+        camera_layout.addRow("Default Resolution:", self.default_resolution)
 
     def setup_analysis_tab(self):
         analysis_tab = QWidget()
-        self.tab_widget.addTab(analysis_tab, QIcon("assets/analysis_icon.png"), "Analysis")
+        self.tab_widget.addTab(analysis_tab, "Analysis")
 
         analysis_layout = QFormLayout(analysis_tab)
 
@@ -452,8 +503,8 @@ class PreferencesDialog(ModernDialog):
         self.max_particle_size.setRange(1, 10000)
         self.max_particle_size.setValue(int(self.settings.value("max_particle_size", 600)))
 
-        analysis_layout.addRow(QLabel("Minimum Particle Size:"), self.min_particle_size)
-        analysis_layout.addRow(QLabel("Maximum Particle Size:"), self.max_particle_size)
+        analysis_layout.addRow("Minimum Particle Size:", self.min_particle_size)
+        analysis_layout.addRow("Maximum Particle Size:", self.max_particle_size)
 
     def browse_project_location(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Default Project Location")
@@ -468,11 +519,6 @@ class PreferencesDialog(ModernDialog):
         self.settings.setValue("min_particle_size", self.min_particle_size.value())
         self.settings.setValue("max_particle_size", self.max_particle_size.value())
         self.accept()
-
-    def apply_theme(self, is_dark):
-        super().apply_theme(is_dark)
-        if hasattr(self, 'tab_widget'):
-            self.tab_widget.apply_theme(is_dark)
 
 
 class FlashingTimedDialog(QDialog):
@@ -633,7 +679,6 @@ class LoadingSplashScreen(QSplashScreen):
         rect = self.rect()
         bottom_section_height = 60
 
-        # Draw a semi-transparent overlay for the bottom section
         painter.fillRect(0, rect.height() - bottom_section_height, rect.width(), bottom_section_height,
                          QColor(0, 0, 0, 40))
 
@@ -644,7 +689,7 @@ class LoadingSplashScreen(QSplashScreen):
         painter.drawText(text_rect, Qt.AlignBottom | Qt.AlignHCenter, f"Loading... {self.progress}%")
 
         # Draw version text
-        monospace_font = QFont("Courier", 9)  # Using Courier as a monospace font
+        monospace_font = QFont("Courier", 9)
         painter.setFont(monospace_font)
         painter.setPen(QColor(100, 100, 100, 180))  # Faded gray color
         version_text = f"v{VERSION}"
@@ -760,19 +805,15 @@ class ProjectSettingsDialog(ModernDialog):
         self.setMinimumSize(400, 200)
         self.current_settings = current_settings or {}
 
-        layout = QVBoxLayout(self)
+        # Setup the main layout
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
 
         self.setup_camera_settings()
-
-        # Add OK and Cancel buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
+        self.create_button_box()
 
     def setup_camera_settings(self):
         group_box = QGroupBox("Camera Settings")
-        form_layout = QFormLayout()
+        form_layout = QFormLayout(group_box)
 
         self.camera_port = QSpinBox()
         self.camera_port.setRange(0, 10)
@@ -783,8 +824,13 @@ class ProjectSettingsDialog(ModernDialog):
         form_layout.addRow("Camera Port:", self.camera_port)
         form_layout.addRow("Resolution:", self.resolution)
 
-        group_box.setLayout(form_layout)
-        self.layout().addWidget(group_box)
+        self.content_layout.addWidget(group_box)
+
+    def create_button_box(self):
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.content_layout.addWidget(button_box)
 
     def get_settings(self):
         return {
@@ -798,7 +844,8 @@ class MagnetDebugDialog(ModernDialog):
         super().__init__(parent, "Magnet Debug")
         self.setMinimumSize(400, 300)
 
-        layout = QVBoxLayout(self)
+        # Setup the main layout
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
 
         # Driver Check
         driver_group = QGroupBox("Driver Status")
@@ -807,14 +854,14 @@ class MagnetDebugDialog(ModernDialog):
         self.filter_label = QLabel("Sensoray 826 Filter: Checking...")
         driver_layout.addWidget(self.driver_label)
         driver_layout.addWidget(self.filter_label)
-        layout.addWidget(driver_group)
+        self.content_layout.addWidget(driver_group)
 
         # Board ID
         board_group = QGroupBox("Board Information")
         board_layout = QVBoxLayout(board_group)
         self.board_id_label = QLabel("Board ID: Checking...")
         board_layout.addWidget(self.board_id_label)
-        layout.addWidget(board_group)
+        self.content_layout.addWidget(board_group)
 
         # Magnet Control
         magnet_group = QGroupBox("Magnet Control")
@@ -829,12 +876,12 @@ class MagnetDebugDialog(ModernDialog):
         self.apply_button = QPushButton("Apply Voltages")
         self.apply_button.clicked.connect(self.apply_voltages)
         magnet_layout.addWidget(self.apply_button)
-        layout.addWidget(magnet_group)
+        self.content_layout.addWidget(magnet_group)
 
         # Close Button
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.close)
-        layout.addWidget(close_button)
+        self.content_layout.addWidget(close_button)
 
         # Check driver and board ID
         QTimer.singleShot(0, self.check_driver_and_board)
@@ -1090,7 +1137,7 @@ class MainMenu(QMainWindow):
         content_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.addWidget(content_widget)
 
-        # Rest of your UI setup...
+        # Setup logo
         self.setup_logo(content_layout)
         content_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
         self.setup_buttons(content_layout)
@@ -1452,6 +1499,7 @@ class VideoWidgetWithOverlay(QLabel):
         self.setText(title)
         self.setStyleSheet("border: 2px solid gray; background-color: black; color: white;")
         self.setMinimumSize(320, 240)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.particles = []
         self.scale_factor = 1.0
         self.offset_x = self.offset_y = 0
@@ -1462,37 +1510,31 @@ class VideoWidgetWithOverlay(QLabel):
         self.current_color = 'green'
         self.start_point = None
         self.setMouseTracking(True)
+        self.original_pixmap = None
 
     def update_frame(self, frame, particles):
         self.particles = particles
         h, w, ch = frame.shape
         qt_image = QImage(frame.data, w, h, ch * w, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(qt_image)
-        scaled_pixmap = pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.setPixmap(scaled_pixmap)
+        self.original_pixmap = QPixmap.fromImage(qt_image)
+        self.update_scaled_pixmap()
 
-        self.scale_factor = min(self.width() / w, self.height() / h)
-        self.offset_x = (self.width() - w * self.scale_factor) / 2
-        self.offset_y = (self.height() - h * self.scale_factor) / 2
+    def update_scaled_pixmap(self):
+        if self.original_pixmap:
+            scaled_pixmap = self.original_pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.setPixmap(scaled_pixmap)
+            self.update_scale_and_offset()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.drawing = True
-            self.start_point = event.pos()
+    def update_scale_and_offset(self):
+        if self.pixmap():
+            pixmap_size = self.pixmap().size()
+            self.scale_factor = min(self.width() / pixmap_size.width(), self.height() / pixmap_size.height())
+            self.offset_x = (self.width() - pixmap_size.width()) / 2
+            self.offset_y = (self.height() - pixmap_size.height()) / 2
 
-    def mouseMoveEvent(self, event):
-        if self.drawing:
-            self.current_box = QRect(self.start_point, event.pos()).normalized()
-            self.update()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.drawing:
-            self.drawing = False
-            if self.current_box:
-                (self.green_boxes if self.current_color == 'green' else self.red_boxes).append(self.current_box)
-            self.current_box = self.start_point = None
-            self.update()
-            self.regionChanged.emit()
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_scaled_pixmap()
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -1520,16 +1562,50 @@ class VideoWidgetWithOverlay(QLabel):
     def _draw_boxes(self, painter):
         painter.setPen(QPen(Qt.green, 2, Qt.SolidLine))
         for box in self.green_boxes:
-            painter.drawRect(box)
+            painter.drawRect(self._scale_rect(box))
 
         painter.setPen(QPen(Qt.red, 2, Qt.SolidLine))
         for box in self.red_boxes:
-            painter.drawRect(box)
+            painter.drawRect(self._scale_rect(box))
 
     def _draw_current_box(self, painter):
         if self.drawing and self.current_box:
             painter.setPen(QPen(Qt.green if self.current_color == 'green' else Qt.red, 2, Qt.SolidLine))
-            painter.drawRect(self.current_box)
+            painter.drawRect(self._scale_rect(self.current_box))
+
+    def _scale_rect(self, rect):
+        return QRect(
+            int(rect.x() * self.scale_factor + self.offset_x),
+            int(rect.y() * self.scale_factor + self.offset_y),
+            int(rect.width() * self.scale_factor),
+            int(rect.height() * self.scale_factor)
+        )
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.drawing = True
+            self.start_point = self._unscale_point(event.pos())
+
+    def mouseMoveEvent(self, event):
+        if self.drawing:
+            end_point = self._unscale_point(event.pos())
+            self.current_box = QRect(self.start_point, end_point).normalized()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.drawing:
+            self.drawing = False
+            if self.current_box:
+                (self.green_boxes if self.current_color == 'green' else self.red_boxes).append(self.current_box)
+            self.current_box = self.start_point = None
+            self.update()
+            self.regionChanged.emit()
+
+    def _unscale_point(self, pos):
+        return QPoint(
+            int((pos.x() - self.offset_x) / self.scale_factor),
+            int((pos.y() - self.offset_y) / self.scale_factor)
+        )
 
     def set_color(self, color):
         self.current_color = color
@@ -1538,7 +1614,6 @@ class VideoWidgetWithOverlay(QLabel):
         self.green_boxes.clear()
         self.red_boxes.clear()
         self.update()
-
 
 
 class ColorDetector:
@@ -2035,7 +2110,11 @@ class ColorDetectionApp(QMainWindow):
         if hasattr(self, 'fade_animation'):
             self.fade_animation.start()
 
-
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
 
     def apply_particle_analysis_settings(self):
         if hasattr(self, 'video_processor'):
@@ -2156,6 +2235,13 @@ class ColorDetectionApp(QMainWindow):
 
         splitter.setSizes([800, 400])
 
+    def setup_logo(self):
+        logo_label = QLabel()
+        logo_pixmap = QPixmap("assets/v3/vtg_icon_comet.png")
+        logo_pixmap = logo_pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo_label.setPixmap(logo_pixmap)
+        return logo_label
+
     def setup_shortcuts(self):
         os_name = platform.system()
 
@@ -2192,9 +2278,31 @@ class ColorDetectionApp(QMainWindow):
         self.control_layout = QVBoxLayout(control_widget)
         parent.addWidget(control_widget)
 
+        # Add a horizontal layout for the project name and logo
+        header_layout = QHBoxLayout()
+        self.control_layout.addLayout(header_layout)
+
+        # Add project name label
+        self.project_name_label = QLabel(self.project_name)
+        self.project_name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        header_layout.addWidget(self.project_name_label)
+
+        # Add stretching space
+        header_layout.addStretch()
+
+        # Add logo
+        logo_label = self.setup_logo()
+        header_layout.addWidget(logo_label)
+
+        # Add a separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.control_layout.addWidget(separator)
+
+        # Rest of the controls
         self.setup_color_control("Red", self.video_processor.red_detector, 4)
         self.setup_color_control("Green", self.video_processor.green_detector, 25)
-
         self.setup_particle_size_control()
         self.setup_particle_info()
         self.setup_roi_controls()
@@ -2331,12 +2439,12 @@ class ColorDetectionApp(QMainWindow):
         self.unsaved_changes = True
         self.update_title()
 
-
     def update_title(self):
         title = f"VANTAGE - {self.project_name}"
         if self.unsaved_changes:
-            title += " (unsaved changes)"
+            title += " *"
         self.setWindowTitle(title)
+        self.project_name_label.setText(self.project_name)
 
     def save_project(self):
         if not self.current_project_path:
@@ -2466,7 +2574,6 @@ class ColorDetectionApp(QMainWindow):
             dialog.exec_()
 
             event.ignore()
-
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
