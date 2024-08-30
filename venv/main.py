@@ -128,7 +128,6 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
-
 class ModernDialog(QDialog):
     def __init__(self, parent=None, title=""):
         super().__init__(parent, Qt.FramelessWindowHint)
