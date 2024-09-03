@@ -8,11 +8,27 @@ import sys
 import time
 import traceback
 from dataclasses import dataclass
+from scipy import ndimage
+
 
 import cv2
 import markdown
 import numpy as np
-from PyQt5.QtCore import QUrl
+import psutil
+
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QTabWidget, QWidget,
+                             QPushButton, QTextBrowser, QMessageBox, QHBoxLayout, QFrame, QGraphicsDropShadowEffect)
+from PyQt5.QtGui import QFont, QPixmap, QColor, QPalette, QIcon, QLinearGradient, QPainter, QDesktopServices
+from PyQt5.QtCore import Qt, PYQT_VERSION_STR, QSize, QUrl, QRect
+from PyQt5.QtSvg import QSvgWidget
+
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QTabWidget, QWidget,
+                             QPushButton, QTextBrowser, QMessageBox, QHBoxLayout, QFrame)
+from PyQt5.QtGui import QFont, QPixmap, QColor, QPalette, QIcon
+from PyQt5.QtCore import Qt, PYQT_VERSION_STR, QSize, QUrl
+from PyQt5.QtSvg import QSvgWidget
+
+from PyQt5.QtCore import QUrl, PYQT_VERSION_STR
 from PyQt5.QtCore import Qt, QTimer, QObject, QPoint, QRect, QPropertyAnimation, QEasingCurve, QSize, pyqtSignal, \
     QSettings
 from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QLinearGradient, QPalette, QIcon, QKeySequence, QFont
@@ -30,6 +46,7 @@ from PyQt5.QtWidgets import QMenu
 from PyQt5.QtWidgets import (QTabWidget)
 
 from s826 import setChanVolt, detectBoard
+
 
 logging.basicConfig(filename='s826Debug.log', level=logging.DEBUG,
                     format='s826DEBUG | %(asctime)s - %(levelname)s - %(message)s')
@@ -118,6 +135,7 @@ DARK_MODE_STYLE = """
     }
 """
 
+FAST_BOOT = True
 
 def global_exception_handler(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
@@ -331,6 +349,22 @@ class ModernTabWidget(QTabWidget):
             """)
 
 
+class PIDController:
+    def __init__(self, kp, ki, kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.prev_error = 0
+        self.integral = 0
+
+    def compute(self, setpoint, current_value, dt):
+        error = setpoint - current_value
+        self.integral += error * dt
+        derivative = (error - self.prev_error) / dt
+        output = self.kp * error + self.ki * self.integral + self.kd * derivative
+        self.prev_error = error
+        return output
+
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -376,7 +410,7 @@ class AboutDialog(QDialog):
             </p>
             <p style='font-size: 14px; margin: 15px 0;'>
                 Developed by<br>
-                <strong>Alfa Ozaltin</strong> and <strong> Nil Ertok <strong><br>
+                <strong>Alfa Ozaltin</strong>
                 @ Stanford University
             </p>
             <p style='margin: 20px 0;'>
@@ -521,12 +555,13 @@ class PreferencesDialog(ModernDialog):
 
 
 class FlashingTimedDialog(QDialog):
-    def __init__(self, title, message, parent=None):
+    def __init__(self, title, message, secs, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
         self.setMinimumWidth(400)
+        self.secs = secs
 
         layout = QVBoxLayout(self)
 
@@ -581,7 +616,7 @@ class FlashingTimedDialog(QDialog):
         self.countdown_timer.timeout.connect(self.update_countdown)
         self.countdown_timer.start(1000)
 
-        self.countdown = 8
+        self.countdown = secs
         self.update_countdown()
 
         self.flash_state = False
@@ -1158,7 +1193,6 @@ class MainMenu(QMainWindow):
 
     def show_about(self):
         about_dialog = AboutDialog(self)
-        about_dialog.apply_theme(True)
         about_dialog.exec_()
 
     def show_user_manual(self):
@@ -1465,8 +1499,24 @@ class ParticleAnalyzer:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         enhanced = self._enhance_image(gray)
         binary = self._create_binary_image(enhanced)
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return contours
+
+        # Apply distance transform
+        dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
+        _, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+
+        # Find unknown region
+        sure_fg = np.uint8(sure_fg)
+        unknown = cv2.subtract(binary, sure_fg)
+
+        # Marker labelling
+        _, markers = cv2.connectedComponents(sure_fg)
+        markers = markers + 1
+        markers[unknown == 255] = 0
+
+        # Apply watershed
+        markers = cv2.watershed(frame, markers)
+
+        return markers
 
     def _enhance_image(self, gray):
         blurred = cv2.GaussianBlur(gray, (7, 7), 0)
@@ -1479,13 +1529,20 @@ class ParticleAnalyzer:
         binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
         return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    def analyze_particles(self, contours, color):
+    def analyze_particles(self, markers, color):
         particles = []
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if self.min_size < area < self.max_size:
-                (x, y), radius = cv2.minEnclosingCircle(contour)
-                particles.append(ParticleData(int(x), int(y), area, color, int(radius)))
+        for label in range(2, markers.max() + 1):  # Start from 2 to skip background (0) and unknown (1)
+            mask = np.zeros(markers.shape, dtype=np.uint8)
+            mask[markers == label] = 255
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            if contours:
+                contour = contours[0]
+                area = cv2.contourArea(contour)
+                if self.min_size < area < self.max_size:
+                    (x, y), radius = cv2.minEnclosingCircle(contour)
+                    particles.append(ParticleData(int(x), int(y), area, color, int(radius)))
+
         return particles
 
 
@@ -1513,8 +1570,10 @@ class VideoWidgetWithOverlay(QLabel):
 
     def update_frame(self, frame, particles):
         self.particles = particles
+        self.frame_size = (frame.shape[1], frame.shape[0])
         h, w, ch = frame.shape
-        qt_image = QImage(frame.data, w, h, ch * w, QImage.Format_RGB888)
+        bytes_per_line = ch * w
+        qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
         self.original_pixmap = QPixmap.fromImage(qt_image)
         self.update_scaled_pixmap()
 
@@ -1527,9 +1586,11 @@ class VideoWidgetWithOverlay(QLabel):
     def update_scale_and_offset(self):
         if self.pixmap():
             pixmap_size = self.pixmap().size()
-            self.scale_factor = min(self.width() / pixmap_size.width(), self.height() / pixmap_size.height())
-            self.offset_x = (self.width() - pixmap_size.width()) / 2
-            self.offset_y = (self.height() - pixmap_size.height()) / 2
+            widget_size = self.size()
+            self.scale_factor = min(widget_size.width() / pixmap_size.width(),
+                                    widget_size.height() / pixmap_size.height())
+            self.offset_x = (widget_size.width() - pixmap_size.width() * self.scale_factor) / 2
+            self.offset_y = (widget_size.height() - pixmap_size.height() * self.scale_factor) / 2
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1541,15 +1602,28 @@ class VideoWidgetWithOverlay(QLabel):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.Antialiasing)
 
+            # Draw debug information
+            painter.setPen(Qt.white)
+            painter.drawText(10, 20, f"Widget size: {self.size().width()}x{self.size().height()}")
+            painter.drawText(10, 40, f"Pixmap size: {self.pixmap().width()}x{self.pixmap().height()}")
+            painter.drawText(10, 60, f"Scale factor: {self.scale_factor:.2f}")
+            painter.drawText(10, 80, f"Offset: ({self.offset_x:.2f}, {self.offset_y:.2f})")
+            painter.drawText(10, 100, f"Frame size: {self.frame_size[0]}x{self.frame_size[1]}")
+
             self._draw_particles(painter)
             self._draw_boxes(painter)
             self._draw_current_box(painter)
 
     def _draw_particles(self, painter):
         for particle in self.particles:
-            x = int(particle.x * self.scale_factor + self.offset_x)
-            y = int(particle.y * self.scale_factor + self.offset_y)
-            radius = int(particle.radius * self.scale_factor)
+            # Calculate position based on original frame size
+            rel_x = particle.x / self.frame_size[0]
+            rel_y = particle.y / self.frame_size[1]
+
+            x = int(rel_x * self.pixmap().width() + self.offset_x)
+            y = int(rel_y * self.pixmap().height() + self.offset_y)
+
+            radius = int((particle.radius / max(self.frame_size)) * min(self.pixmap().width(), self.pixmap().height()))
 
             color = QColor(255, 0, 0) if particle.color == 'red' else QColor(0, 255, 0)
             painter.setPen(QPen(color, 2))
@@ -1557,6 +1631,11 @@ class VideoWidgetWithOverlay(QLabel):
 
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(x + radius + 5, y, f"{particle.size:.0f}")
+
+            # Draw debug cross at particle center
+            painter.setPen(QPen(Qt.yellow, 1))
+            painter.drawLine(x - 5, y, x + 5, y)
+            painter.drawLine(x, y - 5, x, y + 5)
 
     def _draw_boxes(self, painter):
         painter.setPen(QPen(Qt.green, 2, Qt.SolidLine))
@@ -1758,6 +1837,9 @@ class VideoProcessor:
         self.green_detector = ColorDetector(0)
         self.red_analyzer = ParticleAnalyzer()
         self.green_analyzer = ParticleAnalyzer()
+        self.particle_heights = []
+        self.particle_analyzer = ParticleAnalyzer()
+
 
     def set_camera_port(self, camera_port):
         if camera_port != self.camera_port:
@@ -1781,13 +1863,15 @@ class VideoProcessor:
 
         # Process red particles
         red_frame = self.red_detector.detect(frame, 'red')
-        red_contours = self.red_analyzer.detect_particles(red_frame)
-        red_particles = self.red_analyzer.analyze_particles(red_contours, 'red')
+        red_markers = self.particle_analyzer.detect_particles(red_frame)
+        red_particles = self.particle_analyzer.analyze_particles(red_markers, 'red')
 
         # Process green particles
         green_frame = self.green_detector.detect(frame, 'green')
-        green_contours = self.green_analyzer.detect_particles(green_frame)
-        green_particles = self.green_analyzer.analyze_particles(green_contours, 'green')
+        green_markers = self.particle_analyzer.detect_particles(green_frame)
+        green_particles = self.particle_analyzer.analyze_particles(green_markers, 'green')
+
+        self.particle_heights = [self.height - p.y for p in red_particles + green_particles]
 
         return frame, red_particles, green_particles
 
@@ -1801,6 +1885,7 @@ class ColorDetectionApp(QMainWindow):
         self.project_name = project_name
         self.settings = settings or {}
         self.main_menu = main_menu
+        self.current_amp = 0.0
         self.setup_shortcuts()
         self.unsaved_changes = False
         self.current_project_path = None
@@ -1810,8 +1895,14 @@ class ColorDetectionApp(QMainWindow):
 
         width, height = map(int, resolution.split('x'))
         self.video_processor = VideoProcessor(camera_port, width, height)
+
+        # Initialize PID controller
+        self.pid = PIDController(kp=0.1, ki=0.01, kd=0.05)
+        self.height_setpoint = 50  # Initial setpoint (middle of the range)
+
         self.setup_ui()
         self.setup_timer()
+        self.setup_pid_controller()
         self.create_menu()
 
         if settings:
@@ -1822,6 +1913,8 @@ class ColorDetectionApp(QMainWindow):
         self.update_title()
 
         self.apply_theme(True)
+
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def create_menu(self):
         menubar = self.menuBar()
@@ -2014,6 +2107,93 @@ class ColorDetectionApp(QMainWindow):
         group_box.setLayout(layout)
         self.control_layout.addWidget(group_box)
 
+    def setup_height_control(self):
+        self.height_slider = QSlider(Qt.Vertical)
+        self.height_slider.setRange(0, 100)
+        self.height_slider.setValue(50)
+        self.height_slider.setTickPosition(QSlider.TicksRight)
+        self.height_slider.setTickInterval(10)
+        self.height_slider.valueChanged.connect(self.update_height_setpoint)
+
+        slider_layout = QVBoxLayout()
+        slider_layout.addWidget(self.height_slider)
+        slider_widget = QWidget()
+        slider_widget.setLayout(slider_layout)
+
+        main_layout = self.centralWidget().layout()
+        main_layout.addWidget(slider_widget)
+
+    def setup_pid_controller(self):
+        self.pid_timer = QTimer()
+        self.pid_timer.timeout.connect(self.update_particle_height)
+        self.pid_timer.start(100)
+
+    def setup_pid_controls(self):
+        pid_group = QGroupBox("PID Control")
+        pid_layout = QVBoxLayout()
+
+        # Height setpoint slider
+        self.height_setpoint_slider = QSlider(Qt.Horizontal)
+        self.height_setpoint_slider.setRange(0, 100)
+        self.height_setpoint_slider.setValue(50)
+        self.height_setpoint_slider.valueChanged.connect(self.update_height_setpoint)
+        pid_layout.addWidget(QLabel("Height Setpoint:"))
+        pid_layout.addWidget(self.height_setpoint_slider)
+
+        # PID parameter inputs
+        for param in ['Kp', 'Ki', 'Kd']:
+            layout = QHBoxLayout()
+            layout.addWidget(QLabel(f"{param}:"))
+            spinbox = QDoubleSpinBox()
+            spinbox.setRange(0, 1)
+            spinbox.setSingleStep(0.01)
+            spinbox.setValue(getattr(self.pid, param.lower()))
+            spinbox.valueChanged.connect(lambda value, param=param: self.update_pid_param(param, value))
+            setattr(self, f"{param.lower()}_spinbox", spinbox)
+            layout.addWidget(spinbox)
+            pid_layout.addLayout(layout)
+
+        pid_group.setLayout(pid_layout)
+        self.control_layout.addWidget(pid_group)
+
+    def update_height_setpoint(self, value):
+        self.height_setpoint = value
+
+    def update_particle_height(self):
+        if not self.particle_heights:
+            return
+
+        current_height = np.mean(self.particle_heights)
+        normalized_height = current_height / self.video_processor.height  # Normalize to 0-1 range
+        normalized_setpoint = self.height_setpoint / 100  # Convert from 0-100 to 0-1 range
+
+        output = self.pid.compute(normalized_setpoint, normalized_height, dt=0.1)
+        self.adjust_magnet_strength(output)
+
+        # Update UI with current values
+        self.update_pid_info(normalized_setpoint, normalized_height, output)
+
+    def adjust_magnet_strength(self, strength):
+        # Clamp the strength to a reasonable range, e.g., -1 to 1
+        strength = max(-1, min(1, strength))
+        self.pid_intended_output = strength * 3  # Assuming 3 is the max amp
+
+        if self.pid_active:
+            # Scale the strength to appropriate voltage ranges
+            upM = strength * 2.28  # Assuming max voltage is 2.28V
+            botM = -strength * 2.28
+
+            try:
+                setChanVolt(4, upM)
+                setChanVolt(7, botM)
+                self.current_amp = self.pid_intended_output
+                logging.info(f'Magnet strength adjusted: Up = {upM}V, Bottom = {botM}V, Amp = {self.current_amp:.2f}')
+            except Exception as e:
+                logging.error(f"Error adjusting magnet strength: {e}")
+                QMessageBox.warning(self, "Error", f"Failed to adjust magnet strength: {str(e)}")
+
+        self.updateAmpOutput()
+
     def select_camera_port(self):
         current_port = int(self.video_processor.cap.get(cv2.CAP_PROP_POS_FRAMES))
         port, ok = QInputDialog.getInt(self, "Camera Port", "Enter the USB camera port:",
@@ -2023,6 +2203,16 @@ class ColorDetectionApp(QMainWindow):
             self.video_processor = VideoProcessor(port)
             self.unsaved_changes = True
             self.update_title()
+
+    def update_pid_info(self, setpoint, current_height, output):
+        info_text = (f"Setpoint: {setpoint:.2f}\n"
+                     f"Current Height: {current_height:.2f}\n"
+                     f"PID Output: {output:.2f}")
+        if hasattr(self, 'pid_info_label'):
+            self.pid_info_label.setText(info_text)
+        else:
+            self.pid_info_label = QLabel(info_text)
+            self.control_layout.addWidget(self.pid_info_label)
 
     def close_project(self):
         self.close()
@@ -2042,6 +2232,14 @@ class ColorDetectionApp(QMainWindow):
             logging.error(f"Error in show_preferences: {str(e)}")
             logging.error(traceback.format_exc())
             QMessageBox.critical(self, "Error", f"Failed to show preferences: {str(e)}")
+
+
+    def update_magnet_amp_display(self):
+        self.magnet_amp_label.setText(f"Current Magnet Amp: {self.current_amp:.2f}")
+
+    def get_current_magnet_amp(self):
+
+        return self.current_amp if hasattr(self, 'current_amp') else 0.0
 
     def show_project_settings(self):
         current_settings = {
@@ -2067,6 +2265,7 @@ class ColorDetectionApp(QMainWindow):
     def show_user_manual(self):
         user_manual_dialog = UserManualDialog(self)
         user_manual_dialog.exec_()
+
 
     def show_save_icon(self):
         self.show_icon("assets/save_icon.svg", "Project Saved")
@@ -2176,6 +2375,8 @@ class ColorDetectionApp(QMainWindow):
             self.video_processor.red_analyzer.set_size_range(min_size, max_size)
             self.video_processor.green_analyzer.set_size_range(min_size, max_size)
 
+
+
     def setup_auto_save(self):
         if hasattr(self, 'auto_save_timer'):
             self.auto_save_timer.stop()
@@ -2194,10 +2395,7 @@ class ColorDetectionApp(QMainWindow):
         if hasattr(self, 'green_slider'):
             self.green_slider.setValue(self.green_threshold)
 
-    def apply_particle_analysis_settings(self):
-        if hasattr(self, 'video_processor'):
-            self.video_processor.red_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
-            self.video_processor.green_analyzer.set_size_range(self.min_particle_size, self.max_particle_size)
+
 
     def update_particle_size(self):
         self.min_particle_size = self.min_size_spinbox.value()
@@ -2306,11 +2504,63 @@ class ColorDetectionApp(QMainWindow):
         self.setup_particle_info()
         self.setup_roi_controls()
         self.setup_dark_mode_switch()
+        self.setup_pid_controls()
+        self.setupPIDStop()
 
     def setup_timer(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
+
+    def setupPIDStop(self):
+        pid_stop_group = QGroupBox("PID Control Output")
+        pid_stop_layout = QHBoxLayout()
+
+        self.pid_output_label = QLabel("PID AMP OUTPUT: 0.00")
+        self.pid_output_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        pid_stop_layout.addWidget(self.pid_output_label)
+
+        self.pid_arrow_button = QPushButton("→")
+        self.pid_arrow_button.setFixedSize(40, 40)
+        self.pid_arrow_button.setStyleSheet("""
+            QPushButton {
+                font-weight: bold;
+                font-size: 24px;
+                background-color: #4a4a4a;
+                border: 2px solid #6a6a6a;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+        """)
+        self.pid_arrow_button.clicked.connect(self.togglePIDOutput)
+        pid_stop_layout.addWidget(self.pid_arrow_button)
+
+        self.amp_output_label = QLabel("AMP OUTPUT: 0.00")
+        self.amp_output_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        pid_stop_layout.addWidget(self.amp_output_label)
+
+        pid_stop_group.setLayout(pid_stop_layout)
+        self.control_layout.addWidget(pid_stop_group)
+
+        self.pid_active = True
+        self.pid_intended_output = 0.00
+
+    def togglePIDOutput(self):
+        self.pid_active = not self.pid_active
+        if self.pid_active:
+            self.pid_arrow_button.setText("→")
+        else:
+            self.pid_arrow_button.setText("↛")
+        self.updateAmpOutput()
+
+    def updateAmpOutput(self):
+        self.pid_output_label.setText(f"PID AMP OUTPUT: {self.pid_intended_output:.2f}")
+        if self.pid_active:
+            self.amp_output_label.setText(f"AMP OUTPUT: {self.current_amp:.2f}")
+        else:
+            self.amp_output_label.setText("AMP OUTPUT: N/A")
 
     def update_frame(self):
         frame, red_particles, green_particles = self.video_processor.process_frame()
@@ -2321,6 +2571,14 @@ class ColorDetectionApp(QMainWindow):
             self.green_view.update_frame(
                 cv2.cvtColor(self.video_processor.green_detector.detect(frame, 'green'), cv2.COLOR_BGR2RGB),
                 green_particles)
+
+            # Calculate particle heights
+            frame_height = frame.shape[0]
+            self.particle_heights = [frame_height - p.y for p in red_particles + green_particles]
+
+            self.update_particle_info(red_particles, green_particles)
+            self.check_beads_in_rois(red_particles + green_particles)
+
 
     def setup_color_control(self, color, detector, initial_value):
         group_box = QGroupBox(f"{color} Control")
@@ -2384,6 +2642,9 @@ class ColorDetectionApp(QMainWindow):
         self.region_display.setStyleSheet("font-size: 14px; font-weight: bold;")
         self.control_layout.addWidget(self.region_display)
 
+    def update_pid_param(self, param, value):
+        setattr(self.pid, param.lower(), value)
+
     def setup_dark_mode_switch(self):
         self.dark_mode_switch = QCheckBox("Dark Mode")
         self.dark_mode_switch.setChecked(True)  # Set to checked by default
@@ -2391,7 +2652,7 @@ class ColorDetectionApp(QMainWindow):
         self.control_layout.addWidget(self.dark_mode_switch)
 
     def update_particle_info(self, red_particles, green_particles):
-        '''red_count = len(red_particles)
+        red_count = len(red_particles)
         green_count = len(green_particles)
 
         red_avg_size = sum(p.size for p in red_particles) / red_count if red_count > 0 else 0
@@ -2400,8 +2661,8 @@ class ColorDetectionApp(QMainWindow):
         info_text = f"Red Particles: {red_count} (Avg Size: {red_avg_size:.2f})\n"
         info_text += f"Green Particles: {green_count} (Avg Size: {green_avg_size:.2f})"
 
-        self.particle_info_label.setText(info_text)'''
-        pass
+        self.particle_info_label.setText(info_text)
+
 
     def check_beads_in_rois(self, particles):
         green_count = red_count = error_count = 0
@@ -2535,12 +2796,13 @@ class ColorDetectionApp(QMainWindow):
                 error_msg = f"Failed to zero magnets: {str(e)}"
                 logging.critical(error_msg)
 
-                dialog = FlashingTimedDialog(
+                error_dialog = FlashingTimedDialog(
                     'CRITICAL ERROR',
                     'MAGNET AMP FAILED TO ZERO. MANUALLY SHUTDOWN POWER SUPPLIES AND ZERO MAGNET AMP USING BACKUP SOFTWARE',
+                    8,
                     self
                 )
-                dialog.exec_()
+                error_dialog.exec_()
 
             if self.unsaved_changes:
                 reply = QMessageBox.question(self, 'Save Project',
@@ -2565,14 +2827,17 @@ class ColorDetectionApp(QMainWindow):
                 self.remove_project_menus()
                 self.main_menu.show()
 
+            # Close the PID graph window if it's open
+            if hasattr(self, 'pid_graph_window') and self.pid_graph_window:
+                self.pid_graph_window.close()
+
             event.accept()
         except Exception as e:
             error_msg = f"An error occurred while closing the application: {str(e)}\n{traceback.format_exc()}"
             logging.critical(error_msg)
-
-            dialog.exec_()
-
+            QMessageBox.critical(self, "Error", error_msg)
             event.ignore()
+
 
 class FadingSplashScreen(QSplashScreen):
     def __init__(self, logo_path):
@@ -2615,38 +2880,39 @@ class AppLoader(QObject):
         self.main_menu = None
 
     def load(self):
-        time.sleep(0.4)
+
+        if not FAST_BOOT: time.sleep(0.4)
         self.progress_updated.emit(0, "Initializing application...")
         self.main_menu = MainMenu()
-        time.sleep(0.1)
+        if not FAST_BOOT: time.sleep(0.1)
         self.progress_updated.emit(r.randint(10, 32), "Initializing application...")
-        time.sleep(0.1)
+        if not FAST_BOOT: time.sleep(0.1)
 
 
 
         self.progress_updated.emit(40, "Setting up user interface...")
         self.main_menu.setup_ui()
-        time.sleep(0.2)
+        if not FAST_BOOT: time.sleep(0.2)
         self.progress_updated.emit(r.randint(42, 58), "Setting up user interface...")
-        time.sleep(0.3)
+        if not FAST_BOOT: time.sleep(0.3)
 
         self.progress_updated.emit(60, "Creating menu...")
-        time.sleep(0.1)
+        if not FAST_BOOT: time.sleep(0.1)
         self.progress_updated.emit(r.randint(63,79), "Creating menu...")
-        time.sleep(r.randint(50,200)/100)
+        if not FAST_BOOT: time.sleep(r.randint(50,200)/100)
 
 
         self.progress_updated.emit(80, "Loading preferences...")
         self.main_menu.load_preferences()
-        time.sleep(r.randint(0,20)/100)
+        if not FAST_BOOT: time.sleep(r.randint(0,20)/100)
 
         self.progress_updated.emit(90, "Loading recent projects...")
         self.main_menu.load_recent_projects()
-        time.sleep(0.2)
+        if not FAST_BOOT: time.sleep(0.2)
         self.progress_updated.emit(r.randint(91,99), "Loading recent projects...")
 
         self.progress_updated.emit(100, "Finalizing...")
-        time.sleep(r.randint(50, 200) / 100)
+        if not FAST_BOOT: time.sleep(r.randint(50, 200) / 100)
         self.loading_finished.emit(self.main_menu)
 
 
