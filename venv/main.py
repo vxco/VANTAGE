@@ -9,6 +9,8 @@ import time
 import traceback
 from dataclasses import dataclass
 from scipy import ndimage
+import atexit
+
 
 
 import cv2
@@ -2553,6 +2555,8 @@ class ColorDetectionApp(QMainWindow):
             self.pid_arrow_button.setText("→")
         else:
             self.pid_arrow_button.setText("↛")
+            setChanVolt(4, 0)
+            setChanVolt(7, 0)
         self.updateAmpOutput()
 
     def updateAmpOutput(self):
@@ -2782,6 +2786,8 @@ class ColorDetectionApp(QMainWindow):
         self.update_title()
 
     def closeEvent(self, event):
+        setChanVolt(4, 0)
+        setChanVolt(7, 0)
         try:
             self.timer.stop()
             self.video_processor.release()
@@ -2916,8 +2922,18 @@ class AppLoader(QObject):
         self.loading_finished.emit(self.main_menu)
 
 
+def cleanup():
+    try:
+        setChanVolt(4, 0)
+        setChanVolt(7, 0)
+        logging.debug("Channel voltages set to zero")
+    except Exception as e:
+        flashingTimedDialog('CRITICAL ERROR', 'MAGNET AMP FAILED TO ZERO.!!!! MANUALLY SHUTDOWN POWER SUPPLIES AND ZERO MAGNET AMP USING BACKUP SOFTWARE', 15)
+
+
 
 if __name__ == "__main__":
+    atexit.register(cleanup)
     app = QApplication(sys.argv)
     app.setApplicationName("VANTAGE")
     app.setStyle("Fusion")
